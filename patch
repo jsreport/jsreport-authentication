@@ -1,0 +1,2730 @@
+From d00d4f06f0541e52afb778d0626bc3fb3fb9092a Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Thu, 23 Oct 2014 10:52:03 +0200
+Subject: [PATCH] authentication prototype
+
+---
+ extension/authentication/jsreport.config.js      |   6 ++
+ extension/authentication/lib/authentication.js   | 106 +++++++++++++++++++++++
+ extension/authentication/public/views/login.html |  45 ++++++++++
+ 3 files changed, 157 insertions(+)
+
+diff --git a/extension/authentication/.gitignore b/extension/authentication/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/extension/authentication/.npmignore b/extension/authentication/.npmignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/extension/authentication/jsreport.config.js b/extension/authentication/jsreport.config.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ba38ec38bbf9d8006f519d85005760b61dba5ec
+--- /dev/null
++++ b/extension/authentication/jsreport.config.js
+@@ -0,0 +1,6 @@
++﻿module.exports = {
++  "name": "authentication",
++  "main": "lib/authentication.js",
++  "hasPublicPart": false,
++  "dependencies": []
++}
+\ No newline at end of file
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bc543c05d1eea9ec5c33a14673178be6b05202d3
+--- /dev/null
++++ b/extension/authentication/lib/authentication.js
+@@ -0,0 +1,106 @@
++/*!
++ * Copyright(c) 2014 Jan Blaha
++ *
++ */
++
++var q = require("q"),
++    path = require("path"),
++    passport = require('passport'),
++    LocalStrategy = require('passport-local').Strategy,
++    sessions = require("client-sessions"),
++    S = require("string"),
++    _ = require("underscore"),
++    bodyParser = require("body-parser");
++
++module.exports = function (reporter, definition) {
++
++    if (!definition.options.admin)
++        return;
++
++    definition.options.admin.name = definition.options.admin.username;
++
++    reporter.on("before-express-configure", function(app) {
++        configureRoutes(reporter, app, definition.options.admin);
++    });
++};
++
++function configureRoutes(reporter, app, admin) {
++    app.use(sessions({
++        cookieName: 'session',
++        cookie: reporter.options.cookieSession.cookie,
++        secret: reporter.options.cookieSession.secret,
++        duration: 1000 * 60 * 60 * 24 * 365 * 10 // forever
++    }));
++
++    app.use(passport.initialize());
++    app.use(passport.session());
++
++    passport.use(new LocalStrategy(function (username, password, done) {
++        if (admin.username === username && admin.password === password) {
++            done(null, admin);
++        }
++        else {
++            done(null, false, { message: "Invalid password or user does not exists." });
++        }
++    }));
++
++    passport.serializeUser(function (user, done) {
++        done(null, user.username);
++    });
++
++    passport.deserializeUser(function (id, done) {
++        if (id === admin.username)
++            done(null, admin);
++        else
++            done("Invalid username");
++    });
++
++    app.get("/login", function (req, res, next) {
++        if (!req.user) {
++            var viewModel = _.extend({}, req.session.viewModel || {});
++            req.session.viewModel = null;
++            return res.render(path.join(__dirname, '../public/views', 'login.html'), { viewModel: viewModel });
++        }
++        else {
++            next();
++        }
++    });
++
++    app.post('/login', bodyParser.urlencoded({ extended: true, limit: "2mb"}),  function (req, res, next) {
++        req.session.viewModel = req.session.viewModel || {};
++
++        passport.authenticate('local', function (err, user, info) {
++            if (err) {
++                return next(err);
++            }
++
++            if (!user) {
++                req.session.viewModel.login = info.message;
++                return res.redirect('/login');
++            }
++
++            req.session.viewModel = {};
++            req.logIn(user, function (err) {
++                if (err) {
++                    return next(err);
++                }
++
++                return res.redirect('/');
++            });
++        })(req, res, next);
++    });
++
++    app.post("/logout", function (req, res) {
++        req.logout();
++        res.redirect("/login");
++    });
++
++    app.use(function (req, res, next) {
++        if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
++            S(req.url).startsWith("/extension/embedding/public/embed.min.js") || S(req.url).startsWith("/api") || S(req.url).startsWith("/odata")) {
++            return next();
++        }
++
++        return res.redirect("/login");
++    });
++}
+diff --git a/extension/authentication/public/views/login.html b/extension/authentication/public/views/login.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..154c971676948e9fec0730958d1543f6322a24d7
+--- /dev/null
++++ b/extension/authentication/public/views/login.html
+@@ -0,0 +1,45 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++    <meta charset="utf-8">
++    <title>jsreport</title>
++    <link rel="shortcut icon" href="/img/favicon.ico">
++    <meta name="author" content="Jan Blaha">
++    <meta name="description" content="jsreport - javascript business reports">
++    <link href="/css/font-awesome/css/font-awesome.min.css?v=" rel="stylesheet">
++    <link href="/css/built.css?v=" rel="stylesheet">
++</head>
++<body>
++<div class="container text-center">
++    <h1>Login</h1>
++
++    <div class="grid">
++        <div class="row">
++            <div class="col-md-4 well col-lg-offset-4">
++                <form action="/login" method="POST">
++                    <div class="form-group">
++                        <label for="username">Username</label>
++                        <input id="username" name="username" type="text"/>
++                    </div>
++
++                    <div class="form-group">
++                        <label for="password">Password</label>
++                        <input id="password" name="password" type="text"/>
++                    </div>
++
++                    <% if (viewModel.login) { %>
++                    <div class="form-group" style="color: red;">
++                        <strong><%= viewModel.login %></strong>
++                    </div>
++                    <% } %>
++
++                    <div>
++                        <input type="submit" class="btn btn-primary" value="Login"/>
++                    </div>
++                </form>
++            </div>
++        </div>
++    </div>
++</div>
++</body>
++</html>
+
+From d4c34cccbf7c45f2ca1fde17d944554f059373cb Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sat, 25 Oct 2014 11:20:17 +0200
+Subject: [PATCH] fix authentication for embedded
+
+---
+ extension/authentication/lib/authentication.js | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index bc543c05d1eea9ec5c33a14673178be6b05202d3..f2bc35363e1eced7f5751b3eadb808043c613c25 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -19,12 +19,13 @@ module.exports = function (reporter, definition) {
+ 
+     definition.options.admin.name = definition.options.admin.username;
+ 
+-    reporter.on("before-express-configure", function(app) {
++    reporter.on("after-express-static-configure", function(app) {
+         configureRoutes(reporter, app, definition.options.admin);
+     });
+ };
+ 
+ function configureRoutes(reporter, app, admin) {
++
+     app.use(sessions({
+         cookieName: 'session',
+         cookie: reporter.options.cookieSession.cookie,
+@@ -97,7 +98,7 @@ function configureRoutes(reporter, app, admin) {
+ 
+     app.use(function (req, res, next) {
+         if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+-            S(req.url).startsWith("/extension/embedding/public/embed.min.js") || S(req.url).startsWith("/api") || S(req.url).startsWith("/odata")) {
++            S(req.url).startsWith("/extension/embedding/public/embed.min.js")) {
+             return next();
+         }
+ 
+
+From f2da1f6f87d7e8ac93ec31954a1b185853b2ae28 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sat, 25 Oct 2014 22:20:06 +0200
+Subject: [PATCH] ui tests
+
+---
+ extension/authentication/lib/authentication.js     | 29 +++++++++++
+ .../authentication/test/authenticationTest.js      | 57 ++++++++++++++++++++++
+ 2 files changed, 86 insertions(+)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index f2bc35363e1eced7f5751b3eadb808043c613c25..e7bf61c2778304827576ee493aa4bcef3edc9c8f 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -7,6 +7,7 @@ var q = require("q"),
+     path = require("path"),
+     passport = require('passport'),
+     LocalStrategy = require('passport-local').Strategy,
++    BasicStrategy = require('passport-http').BasicStrategy,
+     sessions = require("client-sessions"),
+     S = require("string"),
+     _ = require("underscore"),
+@@ -45,6 +46,15 @@ function configureRoutes(reporter, app, admin) {
+         }
+     }));
+ 
++    passport.use(new BasicStrategy(function (username, password, done) {
++        if (admin.username === username && admin.password === password) {
++            done(null, admin);
++        }
++        else {
++            done(null, false, { message: "Invalid password or user does not exists." });
++        }
++    }));
++
+     passport.serializeUser(function (user, done) {
+         done(null, user.username);
+     });
+@@ -97,6 +107,25 @@ function configureRoutes(reporter, app, admin) {
+     });
+ 
+     app.use(function (req, res, next) {
++        if ((!req.isAuthenticated || !req.isAuthenticated()) &&
++            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1)) {
++
++            passport.authenticate('basic', function (err, user, info) {
++                if (!user) {
++                    res.setHeader('WWW-Authenticate', 'Basic realm=\"realm\"');
++                    return res.status(401).end();
++                }
++
++                req.logIn(user, function () {
++                    next();
++                });
++            })(req, res, next);
++        } else {
++            next();
++        }
++    });
++
++    app.use(function (req, res, next) {
+         if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+             S(req.url).startsWith("/extension/embedding/public/embed.min.js")) {
+             return next();
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1178c5bf9223f06901ebbf46e4a06dbbfa6f3ea
+--- /dev/null
++++ b/extension/authentication/test/authenticationTest.js
+@@ -0,0 +1,57 @@
++/*globals describe, it, beforeEach, afterEach */
++
++var assert = require("assert"),
++    path = require("path"),
++    should = require("should"),
++    request = require('supertest'),
++    describeReporting = require("../../../test/helpers.js").describeReporting;
++
++describeReporting(path.join(__dirname, "../../"), ["express", "authentication"], {
++    authentication: { admin : { username: "admin", password: "password"}},
++    "cookieSession": {
++        "secret": "foo",
++        "cookie": { "domain": "local.net" }
++    }
++}, function(reporter) {
++
++    describe('authentication', function () {
++
++        it("should redirect to login without auth cookie", function(done) {
++            request(reporter.options.express.app).get("/")
++                .end(function (err, res) {
++                    console.log(res.text);
++                    res.header.location.should.containEql("/login");
++                    done();
++                });
++        });
++
++        it("should pass with auth cookie", function(done) {
++
++            request(reporter.options.express.app).post('/login')
++                .type('form')
++                .send({ username: "admin", password:"password" })
++                .end(function (err, res) {
++                    if (err) return done(err);
++
++                    request(reporter.options.express.app).get("/api/version")
++                        .set("cookie", res.headers['set-cookie'])
++                        .expect(200, done)
++                });
++        });
++
++        it("should 401 when calling api without auth header", function(done) {
++            request(reporter.options.express.app).get("/api/version")
++                .expect(401, done);
++        });
++
++        it("should 200 when calling api with auth header", function(done) {
++            request(reporter.options.express.app).get("/api/version")
++                .set("Authorization", "Basic " + new Buffer("admin:password").toString('base64'))
++                .expect(200, done);
++        });
++
++
++    });
++});
++
++
+
+From 94af79add6c01fd77d5319973de40170678764be Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sun, 2 Nov 2014 10:06:22 +0100
+Subject: [PATCH] improving ui tests
+
+---
+ extension/authentication/lib/authentication.js | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index e7bf61c2778304827576ee493aa4bcef3edc9c8f..336f52f2fa14a78080a85149020abe48b3b04905 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -108,7 +108,8 @@ function configureRoutes(reporter, app, admin) {
+ 
+     app.use(function (req, res, next) {
+         if ((!req.isAuthenticated || !req.isAuthenticated()) &&
+-            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1)) {
++            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1) &&
++            req.query.mode !== "embedded") {
+ 
+             passport.authenticate('basic', function (err, user, info) {
+                 if (!user) {
+@@ -126,6 +127,7 @@ function configureRoutes(reporter, app, admin) {
+     });
+ 
+     app.use(function (req, res, next) {
++        console.log("mode is " + req.query.mode + " for " + req.url);
+         if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+             S(req.url).startsWith("/extension/embedding/public/embed.min.js")) {
+             return next();
+
+From 05ee29e8ad15f8f2d03f0efd940e2f058c2c13e7 Mon Sep 17 00:00:00 2001
+From: pofider <honza.pofider@seznam.cz>
+Date: Mon, 3 Nov 2014 14:07:32 +0100
+Subject: [PATCH] cleaning up build files
+
+---
+ extension/authentication/lib/authentication.js | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 336f52f2fa14a78080a85149020abe48b3b04905..e738a4e2f671ea40afd24d0362ba651b47593232 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -127,7 +127,6 @@ function configureRoutes(reporter, app, admin) {
+     });
+ 
+     app.use(function (req, res, next) {
+-        console.log("mode is " + req.query.mode + " for " + req.url);
+         if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+             S(req.url).startsWith("/extension/embedding/public/embed.min.js")) {
+             return next();
+
+From 2ae4535197bb8ea27d51f5c26b9f8571095b080b Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Wed, 5 Nov 2014 12:41:56 +0100
+Subject: [PATCH] some refactoring
+
+---
+ extension/authentication/lib/authentication.js      | 10 +++++-----
+ extension/authentication/test/authenticationTest.js | 11 ++++++-----
+ 2 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index e738a4e2f671ea40afd24d0362ba651b47593232..f331eef8af605f4cd5c173a84ee20c61a91601c7 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -21,16 +21,16 @@ module.exports = function (reporter, definition) {
+     definition.options.admin.name = definition.options.admin.username;
+ 
+     reporter.on("after-express-static-configure", function(app) {
+-        configureRoutes(reporter, app, definition.options.admin);
++        configureRoutes(reporter, app, definition.options.admin, definition);
+     });
+ };
+ 
+-function configureRoutes(reporter, app, admin) {
++function configureRoutes(reporter, app, admin, definition) {
+ 
+     app.use(sessions({
+         cookieName: 'session',
+-        cookie: reporter.options.cookieSession.cookie,
+-        secret: reporter.options.cookieSession.secret,
++        cookie: definition.options.cookieSession.cookie,
++        secret: definition.options.cookieSession.secret,
+         duration: 1000 * 60 * 60 * 24 * 365 * 10 // forever
+     }));
+ 
+@@ -103,7 +103,7 @@ function configureRoutes(reporter, app, admin) {
+ 
+     app.post("/logout", function (req, res) {
+         req.logout();
+-        res.redirect("/login");
++        res.redirect("/");
+     });
+ 
+     app.use(function (req, res, next) {
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index a1178c5bf9223f06901ebbf46e4a06dbbfa6f3ea..9b773e6086a2ba38eb2e28abf21ec407b7b244a9 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -7,11 +7,12 @@ var assert = require("assert"),
+     describeReporting = require("../../../test/helpers.js").describeReporting;
+ 
+ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"], {
+-    authentication: { admin : { username: "admin", password: "password"}},
+-    "cookieSession": {
+-        "secret": "foo",
+-        "cookie": { "domain": "local.net" }
+-    }
++    authentication: {
++        "cookieSession": {
++            "secret": "foo",
++            "cookie": { "domain": "local.net" }
++        },
++        admin : { username: "admin", password: "password"}}
+ }, function(reporter) {
+ 
+     describe('authentication', function () {
+
+From b42a24156e24cad3eaa8129de4fb1aa614087a13 Mon Sep 17 00:00:00 2001
+From: pofider <honza.pofider@seznam.cz>
+Date: Wed, 26 Nov 2014 11:43:50 +0100
+Subject: [PATCH] fixing all jshint errors
+
+---
+ extension/authentication/lib/authentication.js     | 24 +++++++++++-----------
+ .../authentication/test/authenticationTest.js      |  2 +-
+ 2 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index f331eef8af605f4cd5c173a84ee20c61a91601c7..a149dbb19d2e0224b296bc1bd288d7387cf64d8e 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -13,18 +13,6 @@ var q = require("q"),
+     _ = require("underscore"),
+     bodyParser = require("body-parser");
+ 
+-module.exports = function (reporter, definition) {
+-
+-    if (!definition.options.admin)
+-        return;
+-
+-    definition.options.admin.name = definition.options.admin.username;
+-
+-    reporter.on("after-express-static-configure", function(app) {
+-        configureRoutes(reporter, app, definition.options.admin, definition);
+-    });
+-};
+-
+ function configureRoutes(reporter, app, admin, definition) {
+ 
+     app.use(sessions({
+@@ -135,3 +123,15 @@ function configureRoutes(reporter, app, admin, definition) {
+         return res.redirect("/login");
+     });
+ }
++
++module.exports = function (reporter, definition) {
++
++    if (!definition.options.admin)
++        return;
++
++    definition.options.admin.name = definition.options.admin.username;
++
++    reporter.on("after-express-static-configure", function(app) {
++        configureRoutes(reporter, app, definition.options.admin, definition);
++    });
++};
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index 9b773e6086a2ba38eb2e28abf21ec407b7b244a9..036904e49c2f86557bb3da11e23eba78cf172a2c 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -36,7 +36,7 @@ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"],
+ 
+                     request(reporter.options.express.app).get("/api/version")
+                         .set("cookie", res.headers['set-cookie'])
+-                        .expect(200, done)
++                        .expect(200, done);
+                 });
+         });
+ 
+
+From 4da5550562d83eee24890f060e6e6511603f5c07 Mon Sep 17 00:00:00 2001
+From: pofider <honza.pofider@seznam.cz>
+Date: Wed, 26 Nov 2014 19:47:34 +0100
+Subject: [PATCH] embed version refactoring
+
+---
+ extension/authentication/lib/authentication.js | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index a149dbb19d2e0224b296bc1bd288d7387cf64d8e..f552bc451f864c9c5212236b4b3f80ad92284418 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -97,7 +97,7 @@ function configureRoutes(reporter, app, admin, definition) {
+     app.use(function (req, res, next) {
+         if ((!req.isAuthenticated || !req.isAuthenticated()) &&
+             (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1) &&
+-            req.query.mode !== "embedded") {
++            req.query.studio !== "embed") {
+ 
+             passport.authenticate('basic', function (err, user, info) {
+                 if (!user) {
+@@ -115,8 +115,8 @@ function configureRoutes(reporter, app, admin, definition) {
+     });
+ 
+     app.use(function (req, res, next) {
+-        if (req.query.mode === "embedded" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+-            S(req.url).startsWith("/extension/embedding/public/embed.min.js")) {
++        if (req.query.studio === "embed" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
++            S(req.url).startsWith("/extension/embedding/public/embed.js")) {
+             return next();
+         }
+ 
+
+From 78df5fb832281694731ad588866bd70dc99d7532 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Tue, 2 Dec 2014 10:38:09 +0100
+Subject: [PATCH] password input type
+
+---
+ extension/authentication/public/views/login.html | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/extension/authentication/public/views/login.html b/extension/authentication/public/views/login.html
+index 154c971676948e9fec0730958d1543f6322a24d7..2b9bbdc564117a50ce12afd86c0abc5d68d8687d 100644
+--- a/extension/authentication/public/views/login.html
++++ b/extension/authentication/public/views/login.html
+@@ -24,7 +24,7 @@
+ 
+                     <div class="form-group">
+                         <label for="password">Password</label>
+-                        <input id="password" name="password" type="text"/>
++                        <input id="password" name="password" type="password"/>
+                     </div>
+ 
+                     <% if (viewModel.login) { %>
+
+From 1e2806c4f0ff177653201dca876542d578587d4b Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Tue, 13 Jan 2015 20:54:35 +0100
+Subject: [PATCH] sharing templates, wrapped recipes
+
+---
+ extension/authentication/lib/authentication.js     | 71 +++++++++++++++++++---
+ .../authentication/test/authenticationTest.js      |  3 -
+ 2 files changed, 61 insertions(+), 13 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index f552bc451f864c9c5212236b4b3f80ad92284418..56914d720ace52c5785603374770426eff37770d 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -1,6 +1,11 @@
+ /*!
+  * Copyright(c) 2014 Jan Blaha
+  *
++ * Extension used for authenticating user. When the extension is enabled user needs to specify
++ * credentials before the jsreport will serve the request.
++ *
++ * Browser requests are authenticated using cookie.
++ * API requests are authenticated using basic auth.
+  */
+ 
+ var q = require("q"),
+@@ -11,6 +16,7 @@ var q = require("q"),
+     sessions = require("client-sessions"),
+     S = require("string"),
+     _ = require("underscore"),
++    url = require("url"),
+     bodyParser = require("body-parser");
+ 
+ function configureRoutes(reporter, app, admin, definition) {
+@@ -30,7 +36,7 @@ function configureRoutes(reporter, app, admin, definition) {
+             done(null, admin);
+         }
+         else {
+-            done(null, false, { message: "Invalid password or user does not exists." });
++            done(null, false, {message: "Invalid password or user does not exists."});
+         }
+     }));
+ 
+@@ -39,7 +45,7 @@ function configureRoutes(reporter, app, admin, definition) {
+             done(null, admin);
+         }
+         else {
+-            done(null, false, { message: "Invalid password or user does not exists." });
++            done(null, false, {message: "Invalid password or user does not exists."});
+         }
+     }));
+ 
+@@ -58,14 +64,14 @@ function configureRoutes(reporter, app, admin, definition) {
+         if (!req.user) {
+             var viewModel = _.extend({}, req.session.viewModel || {});
+             req.session.viewModel = null;
+-            return res.render(path.join(__dirname, '../public/views', 'login.html'), { viewModel: viewModel });
++            return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel});
+         }
+         else {
+             next();
+         }
+     });
+ 
+-    app.post('/login', bodyParser.urlencoded({ extended: true, limit: "2mb"}),  function (req, res, next) {
++    app.post('/login', bodyParser.urlencoded({extended: true, limit: "2mb"}), function (req, res, next) {
+         req.session.viewModel = req.session.viewModel || {};
+ 
+         passport.authenticate('local', function (err, user, info) {
+@@ -94,13 +100,26 @@ function configureRoutes(reporter, app, admin, definition) {
+         res.redirect("/");
+     });
+ 
++    app.use(function(req, res, next) {
++        var publicRoute = _.find(reporter.authentication.publicRoutes, function (r) {
++            return S(req.url).startsWith(r);
++        });
++
++        var pathname = url.parse(req.url).pathname;
++
++        req.isPublic = publicRoute || S(pathname).endsWith(".js") || S(pathname).endsWith(".css");
++        next();
++    });
++
+     app.use(function (req, res, next) {
+-        if ((!req.isAuthenticated || !req.isAuthenticated()) &&
+-            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1) &&
+-            req.query.studio !== "embed") {
++        if (!req.isAuthenticated() &&
++            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1)) {
+ 
+             passport.authenticate('basic', function (err, user, info) {
+                 if (!user) {
++                    if (req.isPublic) {
++                        return next();
++                    }
+                     res.setHeader('WWW-Authenticate', 'Basic realm=\"realm\"');
+                     return res.status(401).end();
+                 }
+@@ -115,13 +134,39 @@ function configureRoutes(reporter, app, admin, definition) {
+     });
+ 
+     app.use(function (req, res, next) {
+-        if (req.query.studio === "embed" || req.user || S(req.url).startsWith("/css") || S(req.url).startsWith("/img") ||
+-            S(req.url).startsWith("/extension/embedding/public/embed.js")) {
++        if (req.isAuthenticated() || req.isPublic) {
+             return next();
+         }
+ 
+         return res.redirect("/login");
+     });
++
++    app.use(function (req, res, next) {
++        if (!reporter.authorization || req.isPublic) {
++            return next();
++        }
++
++        reporter.authorization.authorizeRequest(req, res).then(function(result) {
++            if (result) {
++                return next();
++            }
++
++            if (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1) {
++                res.setHeader('WWW-Authenticate', 'Basic realm=\"realm\"');
++                return res.status(401).end();
++            }
++
++            return res.redirect("/login");
++        }).catch(function(e) {
++            next(e);
++        });
++    });
++}
++
++function Authentication() {
++    this.publicRoutes = [
++        "/?studio=embed", "/css", "/img", "/js", "/lib", "/html-templates",
++        "/api/recipe", "/api/engine", "/api/settings", "/favicon.ico", "/api/extensions", "/odata/settings"];
+ }
+ 
+ module.exports = function (reporter, definition) {
+@@ -131,7 +176,13 @@ module.exports = function (reporter, definition) {
+ 
+     definition.options.admin.name = definition.options.admin.username;
+ 
+-    reporter.on("after-express-static-configure", function(app) {
++    reporter.authentication = new Authentication();
++
++    reporter.on("export-public-route", function (route) {
++        reporter.authentication.publicRoutes.push(route);
++    });
++
++    reporter.on("after-express-static-configure", function (app) {
+         configureRoutes(reporter, app, definition.options.admin, definition);
+     });
+ };
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index 036904e49c2f86557bb3da11e23eba78cf172a2c..23b17450168cb99e1e0128c9d317ed64cc8ee134 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -20,7 +20,6 @@ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"],
+         it("should redirect to login without auth cookie", function(done) {
+             request(reporter.options.express.app).get("/")
+                 .end(function (err, res) {
+-                    console.log(res.text);
+                     res.header.location.should.containEql("/login");
+                     done();
+                 });
+@@ -50,8 +49,6 @@ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"],
+                 .set("Authorization", "Basic " + new Buffer("admin:password").toString('base64'))
+                 .expect(200, done);
+         });
+-
+-
+     });
+ });
+ 
+
+From 786c46cb223cc96a3b4e08183b63aeaea51861c3 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Tue, 20 Jan 2015 15:26:55 +0100
+Subject: [PATCH] users management
+
+---
+ extension/authentication/.gitignore                |  1 +
+ extension/authentication/jsreport.config.js        |  1 -
+ extension/authentication/lib/authentication.js     | 67 +++++++++------
+ extension/authentication/lib/usersRepository.js    | 82 +++++++++++++++++++
+ extension/authentication/public/js/main_dev.js     | 95 ++++++++++++++++++++++
+ .../public/js/user.changePassword.dialog.js        | 70 ++++++++++++++++
+ .../authentication/public/js/user.create.dialog.js | 61 ++++++++++++++
+ .../public/js/user.detail.toolbar.view.js          | 40 +++++++++
+ .../authentication/public/js/user.detail.view.js   | 10 +++
+ .../authentication/public/js/user.list.model.js    | 28 +++++++
+ .../public/js/user.list.toolbar.view.js            | 25 ++++++
+ .../authentication/public/js/user.list.view.js     | 24 ++++++
+ extension/authentication/public/js/user.model.js   | 19 +++++
+ .../templates/user-changePassword-dialog.html      | 34 ++++++++
+ .../public/templates/user-create-dialog.html       | 31 +++++++
+ .../public/templates/user-detail-toolbar.html      |  8 ++
+ .../public/templates/user-detail.html              |  3 +
+ .../authentication/public/templates/user-info.html | 20 +++++
+ .../public/templates/user-list-header.html         |  1 +
+ .../public/templates/user-list-rows.html           |  2 +
+ .../public/templates/user-list-toolbar.html        |  7 ++
+ .../authentication/public/templates/user-list.html |  5 ++
+ extension/authentication/public/views/login.html   |  9 +-
+ .../authentication/test/authenticationTest.js      |  5 +-
+ 24 files changed, 621 insertions(+), 27 deletions(-)
+
+diff --git a/extension/authentication/.gitignore b/extension/authentication/.gitignore
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..bf074057ff68d17bb22652b8bed703bbf606131a 100644
+--- a/extension/authentication/.gitignore
++++ b/extension/authentication/.gitignore
+@@ -0,0 +1 @@
++public/js/main.js
+\ No newline at end of file
+diff --git a/extension/authentication/jsreport.config.js b/extension/authentication/jsreport.config.js
+index 8ba38ec38bbf9d8006f519d85005760b61dba5ec..10173466368c3e61aa25c286565a2859247b3a45 100644
+--- a/extension/authentication/jsreport.config.js
++++ b/extension/authentication/jsreport.config.js
+@@ -1,6 +1,5 @@
+ ﻿module.exports = {
+   "name": "authentication",
+   "main": "lib/authentication.js",
+-  "hasPublicPart": false,
+   "dependencies": []
+ }
+\ No newline at end of file
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 56914d720ace52c5785603374770426eff37770d..d36176bebe47ba9ded5ff053e9632e94f355e01c 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -17,7 +17,8 @@ var q = require("q"),
+     S = require("string"),
+     _ = require("underscore"),
+     url = require("url"),
+-    bodyParser = require("body-parser");
++    bodyParser = require("body-parser"),
++    UsersRepository = require("./usersRepository");
+ 
+ function configureRoutes(reporter, app, admin, definition) {
+ 
+@@ -31,23 +32,25 @@ function configureRoutes(reporter, app, admin, definition) {
+     app.use(passport.initialize());
+     app.use(passport.session());
+ 
+-    passport.use(new LocalStrategy(function (username, password, done) {
++    function authenticate(username, password, done) {
+         if (admin.username === username && admin.password === password) {
+-            done(null, admin);
++            return done(null, admin);
+         }
+-        else {
+-            done(null, false, {message: "Invalid password or user does not exists."});
+-        }
+-    }));
+ 
+-    passport.use(new BasicStrategy(function (username, password, done) {
+-        if (admin.username === username && admin.password === password) {
+-            done(null, admin);
+-        }
+-        else {
+-            done(null, false, {message: "Invalid password or user does not exists."});
+-        }
+-    }));
++        reporter.authentication.usersRepository.authenticate(username, password).then(function(user) {
++            if (!user) {
++                return done(null, false, {message: "Invalid password or user does not exists."});
++            }
++
++            return done(null, user);
++        }).catch(function(e){
++            done(null, false, {message: e.message});
++        });
++    }
++
++    passport.use(new LocalStrategy(authenticate));
++
++    passport.use(new BasicStrategy(authenticate));
+ 
+     passport.serializeUser(function (user, done) {
+         done(null, user.username);
+@@ -55,9 +58,13 @@ function configureRoutes(reporter, app, admin, definition) {
+ 
+     passport.deserializeUser(function (id, done) {
+         if (id === admin.username)
+-            done(null, admin);
+-        else
+-            done("Invalid username");
++            return done(null, admin);
++
++        reporter.authentication.usersRepository.find(id).then(function(user) {
++            done(null, user);
++        }).catch(function(e) {
++            done(e);
++        });
+     });
+ 
+     app.get("/login", function (req, res, next) {
+@@ -81,7 +88,8 @@ function configureRoutes(reporter, app, admin, definition) {
+ 
+             if (!user) {
+                 req.session.viewModel.login = info.message;
+-                return res.redirect('/login');
++                console.log(req.query.returnUrl);
++                return res.redirect('/login?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
+             }
+ 
+             req.session.viewModel = {};
+@@ -90,7 +98,7 @@ function configureRoutes(reporter, app, admin, definition) {
+                     return next(err);
+                 }
+ 
+-                return res.redirect('/');
++                return res.redirect(decodeURIComponent(req.query.returnUrl) || "/");
+             });
+         })(req, res, next);
+     });
+@@ -138,7 +146,9 @@ function configureRoutes(reporter, app, admin, definition) {
+             return next();
+         }
+ 
+-        return res.redirect("/login");
++        var viewModel = _.extend({}, req.session.viewModel || {});
++        req.session.viewModel = null;
++        return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel});
+     });
+ 
+     app.use(function (req, res, next) {
+@@ -161,12 +171,22 @@ function configureRoutes(reporter, app, admin, definition) {
+             next(e);
+         });
+     });
++
++    app.post("/api/users/:shortid/password", function(req, res, next) {
++       reporter.authentication.usersRepository.changePassword(req.user, req.params.shortid,req.body.oldPassword,req.body.newPassword).then(function(user) {
++            res.send("ok");
++        }).catch(function(e) {
++            next(e);
++        });
++    });
+ }
+ 
+-function Authentication() {
++function Authentication(reporter) {
+     this.publicRoutes = [
+         "/?studio=embed", "/css", "/img", "/js", "/lib", "/html-templates",
+         "/api/recipe", "/api/engine", "/api/settings", "/favicon.ico", "/api/extensions", "/odata/settings"];
++
++    this.usersRepository = new UsersRepository(reporter);
+ }
+ 
+ module.exports = function (reporter, definition) {
+@@ -175,8 +195,9 @@ module.exports = function (reporter, definition) {
+         return;
+ 
+     definition.options.admin.name = definition.options.admin.username;
++    definition.options.admin.isAdmin = true;
+ 
+-    reporter.authentication = new Authentication();
++    reporter.authentication = new Authentication(reporter);
+ 
+     reporter.on("export-public-route", function (route) {
+         reporter.authentication.publicRoutes.push(route);
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1e585bbafa43ee0366db08805277250a0767d4a4
+--- /dev/null
++++ b/extension/authentication/lib/usersRepository.js
+@@ -0,0 +1,82 @@
++var passwordHash = require('password-hash'),
++    shortid = require("shortid"),
++    q = require("q");
++
++function UsersRepository(reporter) {
++    var self = this;
++    this.reporter = reporter;
++
++    var userAttributes = {
++        _id: {type: "id", key: true, computed: true, nullable: false},
++        shortid: {type: "string"},
++        username: {type: "string"},
++        password: {type: "string"}
++    };
++
++
++    this.UserType = this.reporter.dataProvider.createEntityType("UserType", userAttributes);
++    var usersSet = this.reporter.dataProvider.registerEntitySet("users", this.UserType, { shared: true, tableOptions: {humanReadableKeys: ["shortid"]}});
++
++    usersSet.beforeCreateListeners.add("repository", function(key, items) {
++        var user = items[0];
++
++        return self.find(user.username).then(function(user) {
++            if (user) {
++                process.domain.req.customError = new Error("User already exists");
++                return q.reject(process.domain.req.customError);
++            }
++
++            return true;
++        });
++    });
++
++    this.UserType.addEventListener("beforeCreate", function(args, entity) {
++        if (!entity.shortid)
++            entity.shortid = shortid.generate();
++
++        entity.password = passwordHash.generate(entity.password);
++    });
++}
++
++
++UsersRepository.prototype.authenticate = function(username, password) {
++    return this.reporter.dataProvider.startContext().then(function(context) {
++        context.skipAuthorization = true;
++        return context.users.filter(function(u) { return u.username === this.username; }, { username : username}).toArray().then(function(users) {
++            if (users.length !== 1 || !passwordHash.verify(password, users[0].password))
++                return null;
++
++            return users[0];
++        });
++    });
++};
++
++UsersRepository.prototype.find = function(username) {
++    return this.reporter.dataProvider.startContext().then(function(context) {
++        context.skipAuthorization = true;
++        return context.users.filter(function(u) { return u.username === this.username; }, { username : username}).toArray().then(function(users) {
++            if (users.length !== 1)
++                return null;
++
++            return users[0];
++        });
++    });
++};
++
++UsersRepository.prototype.changePassword = function(currentUser, shortid, oldPassword, newPassword) {
++    return this.reporter.dataProvider.startContext().then(function(context) {
++        return context.users.single(function(u) { return u.shortid === this.shortid; }, { shortid : shortid}).then(function(user) {
++            if (!currentUser.isAdmin && !passwordHash.verify(oldPassword, user.password)) {
++                return q.reject(new Error("Invalid password"));
++            }
++
++            console.log("updating " + currentUser.isAdmin + " " + !passwordHash.verify(oldPassword, user.password));
++
++            context.users.attach(user);
++            user.password = passwordHash.generate(newPassword);
++
++            return context.saveChanges();
++        });
++    });
++};
++module.exports = UsersRepository;
+diff --git a/extension/authentication/public/js/main_dev.js b/extension/authentication/public/js/main_dev.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c3212cb5e4c4302b275d930cadb498f99df2d132
+--- /dev/null
++++ b/extension/authentication/public/js/main_dev.js
+@@ -0,0 +1,95 @@
++define(["app", "underscore", "marionette", "backbone",
++        "./user.list.model", "./user.list.view", "./user.list.toolbar.view",
++        "./user.model", "./user.detail.view", "./user.detail.toolbar.view", "./user.create.dialog",
++        "./user.changePassword.dialog"],
++    function (app, _,  Marionette, Backbone, UserListModel, UserListView, UserListToolbarView, UserModel, UserDetailView,
++              UserDetailToolbarView, UserCreateDialog, ChangePasswordDialog) {
++
++        app.module("authentication", function (module) {
++            module.UsersListModel = UserListModel;
++
++            var Router = Backbone.Router.extend({
++                initialize: function () {
++                    app.listenTo(app, "user-created", function (model) {
++                        window.location.hash = "/extension/users/detail/" + model.get("shortid");
++                    });
++                },
++
++                routes: {
++                    "extension/users/list": "users",
++                    "extension/users/detail/:id": "userDetail",
++                    "extension/users/detail": "userDetail"
++                },
++
++                users: function () {
++                    this.navigate("/extension/users/list");
++
++                    var model = new UserListModel();
++                    app.layout.showToolbarViewComposition(new UserListView({ collection: model }), new UserListToolbarView({ collection: model }));
++                    model.fetch();
++                },
++
++                userDetail: function (id) {
++                    var model = new UserModel();
++                    app.layout.showToolbarViewComposition(new UserDetailView({ model: model }), new UserDetailToolbarView({ model: model }));
++
++                    if (id != null) {
++                        model.set("shortid", id);
++                        model.fetch();
++                    }
++                }
++            });
++
++            module.router = new Router();
++
++            app.on("create-user", function() {
++                var dialog = new UserCreateDialog({ model: new UserModel() });
++                app.layout.dialog.show(dialog);
++                new UserCreateDialog();
++            });
++
++
++            app.on("menu-render", function (context) {
++                if (app.settings.tenant.isAdmin) {
++                    context.result += "<li><a href='/#/extension/users/list'>Users</a></li>";
++                }
++            });
++
++            app.on("user-info-render", function (context) {
++                context.result += $.render["user-info"]();
++
++                context.on("after-render", function($el) {
++                    $el.find("#changePasswordCommand").click(function() {
++                        var dialog = new ChangePasswordDialog({ model: new UserModel(app.settings.tenant) });
++                        app.layout.dialog.show(dialog);
++                    });
++                });
++            });
++
++            app.on("menu-actions-render", function (context) {
++                if (app.settings.tenant.isAdmin) {
++                    context.result += "<li><a id='createUserCommand' class='validate-leaving'>Create User</a></li>";
++                    context.on("after-render", function ($el) {
++                        $($el).find("#createUserCommand").click(function () {
++                            app.trigger("create-user");
++                        });
++                    });
++                }
++            });
++
++            app.on("entity-registration", function(context) {
++                $data.Class.define("$entity.User", $data.Entity, null, {
++                    '_id': { 'key': true, 'nullable': false, 'computed': true, 'type': 'Edm.String'},
++                    'shortid': { 'type': 'Edm.String' },
++                    'username': { 'type': 'Edm.String' },
++                    "password": { type: "Edm.String" }
++                }, null);
++
++                $entity.User.prototype.toString = function () {
++                    return "User " + (this.username || "");
++                };
++
++                context["users"] = { type: $data.EntitySet, elementType: $entity.User };
++            });
++        });
++    });
+\ No newline at end of file
+diff --git a/extension/authentication/public/js/user.changePassword.dialog.js b/extension/authentication/public/js/user.changePassword.dialog.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ae7d24e52223648b14bcf73d986454d878aaa08
+--- /dev/null
++++ b/extension/authentication/public/js/user.changePassword.dialog.js
+@@ -0,0 +1,70 @@
++define(["app", "underscore", "marionette", "core/dataGrid", "core/view.base", "core/basicModel"], function (app, _, Marionette, DataGrid, ViewBase, ModelBase) {
++
++    var ChangePasswordCommand = ModelBase.extend({
++        url: function() {
++            return "users/" + this.get("shortid") + "/password";
++        }
++    });
++
++    return ViewBase.extend({
++        template: "user-changePassword-dialog",
++
++        initialize: function() {
++            var self = this;
++            _.bindAll(this, "change", "validatePasswords");
++        },
++
++        events: {
++            "click #okCommand": "change",
++            "keyup [name='newPassword']": "validatePasswords",
++            "keyup [name='newPasswordVerification']": "validatePasswords"
++        },
++
++        validatePasswords: function() {
++            var password = this.$el.find("[name='newPassword']").val();
++            var passwordVerification = this.$el.find("[name='newPasswordVerification']").val();
++
++            if (password && passwordVerification &&
++                password !== passwordVerification)
++                this.$el.find("#passwordValidation").show();
++            else
++                this.$el.find("#passwordValidation").hide();
++        },
++
++        onValidate: function() {
++            var res = [];
++
++            if (this.model.get("newPassword") == null || this.model.get("newPassword") === "")
++                res.push({
++                    message: "Password cannot be empty"
++                });
++
++            if (this.model.get("newPassword") !== this.model.get("newPasswordVerification"))
++                res.push({
++                    message: "Passwords do not match"
++                });
++
++            return res;
++        },
++
++
++        change: function() {
++            var self = this;
++            var command = new ChangePasswordCommand({
++                shortid: this.model.get("shortid"),
++                oldPassword: this.model.get("oldPassword"),
++                newPassword: this.model.get("newPassword")
++            });
++
++            command.save({}, {
++                success: function() {
++                    self.model.set("oldPassword", "");
++                    self.model.set("newPassword", "");
++                    self.model.set("newPasswordVerification", "");
++                    app.layout.dialog.hide();
++                }
++            });
++        }
++    });
++});
++
+diff --git a/extension/authentication/public/js/user.create.dialog.js b/extension/authentication/public/js/user.create.dialog.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e20392eabb1971917ea19841e238930e7c99c3fa
+--- /dev/null
++++ b/extension/authentication/public/js/user.create.dialog.js
+@@ -0,0 +1,61 @@
++define(["app", "underscore", "marionette", "core/dataGrid", "core/view.base"], function (app, _, Marionette, DataGrid, ViewBase) {
++    return ViewBase.extend({
++        template: "user-create-dialog",
++
++        initialize: function() {
++            _.bindAll(this, "create", "validatePasswords");
++        },
++
++        events: {
++            "click #okCommand": "create",
++            "keyup [name='password']": "validatePasswords",
++            "keyup [name='passwordVerification']": "validatePasswords"
++        },
++
++        validatePasswords: function() {
++            var password = this.$el.find("[name='password']").val();
++            var passwordVerification = this.$el.find("[name='passwordVerification']").val();
++
++            if (password && passwordVerification &&
++                password !== passwordVerification)
++                this.$el.find("#passwordValidation").show();
++            else
++                this.$el.find("#passwordValidation").hide();
++        },
++
++        onValidate: function() {
++            var res = [];
++
++            if (this.model.get("username") == null || this.model.get("username") === "")
++                res.push({
++                    message: "Username cannot be empty"
++                });
++
++            if (this.model.get("password") == null || this.model.get("password") === "")
++                res.push({
++                    message: "Password cannot be empty"
++                });
++
++            if (this.model.get("password") !== this.model.get("passwordVerification"))
++                res.push({
++                    message: "Passwords do not match"
++                });
++
++            return res;
++        },
++
++        create: function() {
++            if (!this.validate())
++                return;
++
++            var self = this;
++            this.model.save({}, {
++                success: function() {
++                    app.layout.dialog.hide();
++                    app.trigger("user-created", self.model);
++                }
++            });
++        }
++    });
++});
++
+diff --git a/extension/authentication/public/js/user.detail.toolbar.view.js b/extension/authentication/public/js/user.detail.toolbar.view.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9cd12567ee6170bc506a47308cd008367ac1275
+--- /dev/null
++++ b/extension/authentication/public/js/user.detail.toolbar.view.js
+@@ -0,0 +1,40 @@
++define(["jquery", "app", "core/utils", "core/view.base", "./user.changePassword.dialog"],
++    function($, app, Utils, LayoutBase, ChangePasswordDialog) {
++        return LayoutBase.extend({
++            template: "user-detail-toolbar",
++
++            events: {
++                "click #saveCommand": "save",
++                "click #changePasswordCommand": "change"
++
++            },
++
++            save: function() {
++                if (!this.validate())
++                    return;
++
++                var self = this;
++                this.model.save({}, {
++                    success: function() {
++                        app.trigger("user-saved", self.model);
++                    }
++                });
++            },
++
++            change: function() {
++                var dialog = new ChangePasswordDialog({ model: this.model });
++                app.layout.dialog.show(dialog);
++            },
++
++            onValidate: function() {
++                var res = [];
++
++                if (this.model.get("username") == null || this.model.get("username") === "")
++                    res.push({
++                        message: "Username cannot be empty"
++                    });
++
++                return res;
++            }
++        });
++    });
+\ No newline at end of file
+diff --git a/extension/authentication/public/js/user.detail.view.js b/extension/authentication/public/js/user.detail.view.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c65eea93200d02218a7040202176d7a138f8de9
+--- /dev/null
++++ b/extension/authentication/public/js/user.detail.view.js
+@@ -0,0 +1,10 @@
++define(["marionette", "core/view.base", "core/aceBinder"], function(Marionette, ViewBase, aceBinder) {
++    return ViewBase.extend({
++        template: "user-detail",
++
++        initialize: function() {
++            var self = this;
++            this.listenTo(this.model, "sync", self.render);
++        }
++    });
++});
+\ No newline at end of file
+diff --git a/extension/authentication/public/js/user.list.model.js b/extension/authentication/public/js/user.list.model.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c467ae02c31e5bb13d65b932ae6e0dc5a601fddb
+--- /dev/null
++++ b/extension/authentication/public/js/user.list.model.js
+@@ -0,0 +1,28 @@
++define(["app", "backbone", "core/dataGrid", "./user.model"], function (app, Backbone, DataGrid, UserModel) {
++    return Backbone.Collection.extend({
++
++        initialize: function () {
++            var self = this;
++            this.filter = new DataGrid.Filter.Base();
++            this.filter.bind("apply", function () {
++                self.fetch();
++            });
++        },
++
++        parse: function (data) {
++            if (data.totalCount != null)
++                this.filter.set("totalCount", data.totalCount);
++
++            return data;
++        },
++
++        fetchQuery: function () {
++            return app.dataContext.users.applyFilter(this.filter).toArray();
++        },
++
++        model: UserModel
++    });
++});
++
++
++
+diff --git a/extension/authentication/public/js/user.list.toolbar.view.js b/extension/authentication/public/js/user.list.toolbar.view.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..298292afd679c576ddae78099aec8d6f07595123
+--- /dev/null
++++ b/extension/authentication/public/js/user.list.toolbar.view.js
+@@ -0,0 +1,25 @@
++define(["jquery", "app", "core/utils", "core/view.base", "underscore"],
++    function ($, app, Utils, LayoutBase) {
++        return LayoutBase.extend({
++            template: "user-list-toolbar",
++
++            initialize: function () {
++            },
++
++
++            events: {
++                "click #deleteCommand": "deleteCommand",
++                "click #createCommand": "createCommand"
++
++            },
++
++            deleteCommand: function() {
++                this.contentView.dataGrid.deleteItems();
++            },
++
++            createCommand: function() {
++                app.trigger("create-user");
++            }
++        });
++    });
++
+diff --git a/extension/authentication/public/js/user.list.view.js b/extension/authentication/public/js/user.list.view.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c440be8c0a699400d52c4e391de0b2882f88e073
+--- /dev/null
++++ b/extension/authentication/public/js/user.list.view.js
+@@ -0,0 +1,24 @@
++define(["marionette", "core/dataGrid", "core/view.base"], function (Marionette, DataGrid, ViewBase) {
++    return ViewBase.extend({
++        template: "user-list",
++
++        initialize: function () {
++            this.listenTo(this.collection, "sync", this.render);
++            this.listenTo(this.collection, "remove", this.render);
++        },
++
++        onDomRefresh: function () {
++            this.dataGrid = DataGrid.show({
++                collection: this.collection,
++                filter: this.collection.filter,
++                idKey: "shortid",
++                onShowDetail: function (id) {
++                    window.location.hash = "extension/users/detail/" + id;
++                },
++                el: $("#usersGridBox"),
++                headerTemplate: "user-list-header",
++                rowsTemplate: "user-list-rows"
++            });
++        }
++    });
++}); 
+\ No newline at end of file
+diff --git a/extension/authentication/public/js/user.model.js b/extension/authentication/public/js/user.model.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..629b86c7301d3b5cad9da3d2945b0b88483c8895
+--- /dev/null
++++ b/extension/authentication/public/js/user.model.js
+@@ -0,0 +1,19 @@
++define(["app", "core/jaydataModel"], function(app, ModelBase) {
++
++    return ModelBase.extend({
++        contextSet: function() { return app.dataContext.users; },
++
++        fetchQuery: function (cb) {
++            return this.contextSet().single(function(r) { return r.shortid === this.id; }, { id: this.get("shortid") });
++        },
++
++        _initialize: function() {
++            var self = this;
++            this.Entity = $entity.User;
++        },
++
++        toString: function() {
++            return "User " + (this.get("username") || "");
++        }
++    });
++});
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-changePassword-dialog.html b/extension/authentication/public/templates/user-changePassword-dialog.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..ee199a5129ca621d76e535cb87b4128732604074
+--- /dev/null
++++ b/extension/authentication/public/templates/user-changePassword-dialog.html
+@@ -0,0 +1,34 @@
++<div class="modal-dialog">
++    <div class="modal-content">
++        <div class="modal-header">
++            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
++            <h4 class="modal-title">Change password</h4>
++        </div>
++        <div class="modal-body">
++            {{if ~getTenant().isAdmin}}
++            {{else}}
++            <div class="form-group">
++                <label>Old password:</label>
++                <input type="password" name="oldPassword" class="form-control">
++            </div>
++            {{/if}}
++            <div class="form-group">
++                <label>New password:</label>
++                <input type="password" name="newPassword" class="form-control">
++            </div>
++            <div class="form-group">
++                <label>New password verification:</label>
++                <input type="password" name="newPasswordVerification" class="form-control">
++            </div>
++            <div class="form-group">
++                <div class="label label-danger" style="display:none" id="passwordValidation">
++                    Passwords do not match.
++                </div>
++            </div>
++        </div>
++        <div class="modal-footer">
++            <button type="button" class="btn btn-primary btn-sm" id="okCommand">Ok</button>
++            <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Cancel</button>
++        </div>
++    </div>
++</div>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-create-dialog.html b/extension/authentication/public/templates/user-create-dialog.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..d112c8ce1b6c730a30340e1aa5beb02d312d7e27
+--- /dev/null
++++ b/extension/authentication/public/templates/user-create-dialog.html
+@@ -0,0 +1,31 @@
++<div class="modal-dialog">
++    <div class="modal-content">
++        <div class="modal-header">
++            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
++            <h4 class="modal-title">Create user</h4>
++        </div>
++        <div class="modal-body">
++            <div class="form-group">
++                <label>Username:</label>
++                <input type="text" name="username" class="form-control">
++            </div>
++            <div class="form-group">
++                <label>Password:</label>
++                <input type="password" name="password" class="form-control">
++            </div>
++            <div class="form-group">
++                <label>Password verification:</label>
++                <input type="password" name="passwordVerification" class="form-control">
++            </div>
++            <div class="form-group">
++                <div class="label label-danger" style="display:none" id="passwordValidation">
++                    Passwords do not match.
++                </div>
++            </div>
++        </div>
++        <div class="modal-footer">
++            <button type="button" class="btn btn-primary btn-sm" id="okCommand">Ok</button>
++            <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Cancel</button>
++        </div>
++    </div>
++</div>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-detail-toolbar.html b/extension/authentication/public/templates/user-detail-toolbar.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..ddcbfa97a6f208bd16aee9d70c25a80f4c87b725
+--- /dev/null
++++ b/extension/authentication/public/templates/user-detail-toolbar.html
+@@ -0,0 +1,8 @@
++<div class="navbar-header submenu">
++    <ul class="nav navbar-nav sub-header">
++        <li><a id="saveCommand"><i class="glyphicon glyphicon-floppy-save"></i>Save</a></li>
++    </ul>
++    <ul class="nav navbar-nav sub-header">
++        <li><a id="changePasswordCommand"><i class="glyphicon glyphicon-floppy-save"></i>Change Password</a></li>
++    </ul>
++</div>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-detail.html b/extension/authentication/public/templates/user-detail.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed8f9517af67617ddebc2f38780f61a2781430b2
+--- /dev/null
++++ b/extension/authentication/public/templates/user-detail.html
+@@ -0,0 +1,3 @@
++<div>
++    <h1>{{:username}}</h1>
++</div>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-info.html b/extension/authentication/public/templates/user-info.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..812799d4fc008e7b4f526e8b2a2c9db3eca24e25
+--- /dev/null
++++ b/extension/authentication/public/templates/user-info.html
+@@ -0,0 +1,20 @@
++<li class="dropdown">
++    <a href="#" class="dropdown-toggle user-info-btn" data-toggle="dropdown"><i class="fa fa-user fa-logged"></i><span
++            class="user-info">
++            <small> Welcome,<br>{{:~getUserIdentificationText()}}
++            </small></span> <b class="caret"></b></a>
++
++    <ul class="dropdown-menu">
++        <li>
++            {{if ~getTenant().isAdmin}}
++            {{else}}
++            <a id='changePasswordCommand'>Change password</a>
++            {{/if}}
++            <a id='logoutLink' onclick=" $('#logoutBtn').click()"><i class="fa fa-power-off"></i> Logout </a>
++
++            <form method="POST" action="/logout">
++                <input type="submit" id="logoutBtn" style="display: none"/>
++            </form>
++        </li>
++    </ul>
++</li>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-list-header.html b/extension/authentication/public/templates/user-list-header.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a7ea6773a0d1d455579372b7eda388a6788ed44
+--- /dev/null
++++ b/extension/authentication/public/templates/user-list-header.html
+@@ -0,0 +1 @@
++<th>USERNAME</th>
+\ No newline at end of file
+diff --git a/extension/authentication/public/templates/user-list-rows.html b/extension/authentication/public/templates/user-list-rows.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..16c779c428e8e7e83c32cc38c077a39b53bafed7
+--- /dev/null
++++ b/extension/authentication/public/templates/user-list-rows.html
+@@ -0,0 +1,2 @@
++<td class="link"><a>{{:username}}</a></td>
++
+diff --git a/extension/authentication/public/templates/user-list-toolbar.html b/extension/authentication/public/templates/user-list-toolbar.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4e519ed8bd07f79b41df5e19f9667cdbdd85410
+--- /dev/null
++++ b/extension/authentication/public/templates/user-list-toolbar.html
+@@ -0,0 +1,7 @@
++<div class="navbar-header submenu">
++    <ul class="nav navbar-nav sub-header">
++        <li><a id="createCommand"><i class="glyphicon glyphicon-plus"></i>New</a></li>
++        <li><a id="deleteCommand"><i class="glyphicon glyphicon-trash"></i>Delete</a></li>
++    </ul>
++</div>
++
+diff --git a/extension/authentication/public/templates/user-list.html b/extension/authentication/public/templates/user-list.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..e8599b15728787587d0e8fc62250e9df37d1bfb4
+--- /dev/null
++++ b/extension/authentication/public/templates/user-list.html
+@@ -0,0 +1,5 @@
++<span><h3>all users</h3></span>
++
++<div id="usersGridBox">
++
++</div>
+\ No newline at end of file
+diff --git a/extension/authentication/public/views/login.html b/extension/authentication/public/views/login.html
+index 2b9bbdc564117a50ce12afd86c0abc5d68d8687d..5324f4de680ff7950a34904bc1f3ceef42416dbe 100644
+--- a/extension/authentication/public/views/login.html
++++ b/extension/authentication/public/views/login.html
+@@ -16,7 +16,7 @@
+     <div class="grid">
+         <div class="row">
+             <div class="col-md-4 well col-lg-offset-4">
+-                <form action="/login" method="POST">
++                <form id="loginForm"  method="POST">
+                     <div class="form-group">
+                         <label for="username">Username</label>
+                         <input id="username" name="username" type="text"/>
+@@ -41,5 +41,12 @@
+         </div>
+     </div>
+ </div>
++<script>
++    var form = document.getElementById("loginForm");
++    if (window.location.pathname.lastIndexOf("/login", 0) === 0)
++        form.action = window.location.pathname + window.location.search;
++    else
++    form.action = "/login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.hash + window.location.search);
++</script>
+ </body>
+ </html>
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index 23b17450168cb99e1e0128c9d317ed64cc8ee134..494388eaf22475628e132525508448067adfbf62 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -17,10 +17,11 @@ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"],
+ 
+     describe('authentication', function () {
+ 
+-        it("should redirect to login without auth cookie", function(done) {
++        it("should respond with login without cookie", function(done) {
+             request(reporter.options.express.app).get("/")
+                 .end(function (err, res) {
+-                    res.header.location.should.containEql("/login");
++                    console.log(res);
++                    res.text.should.containEql("<h1>Login</h1>");
+                     done();
+                 });
+         });
+
+From 3425ab1f06e733541c76a71cb942403f6471dcda Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sat, 24 Jan 2015 22:37:06 +0100
+Subject: [PATCH] finishing release with user management
+
+---
+ extension/authentication/lib/authentication.js  | 1 -
+ extension/authentication/lib/usersRepository.js | 2 --
+ extension/authentication/public/js/main_dev.js  | 4 ++++
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index d36176bebe47ba9ded5ff053e9632e94f355e01c..df6d4799ccc6d58b3458437194a3cab5895c816f 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -88,7 +88,6 @@ function configureRoutes(reporter, app, admin, definition) {
+ 
+             if (!user) {
+                 req.session.viewModel.login = info.message;
+-                console.log(req.query.returnUrl);
+                 return res.redirect('/login?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
+             }
+ 
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+index 1e585bbafa43ee0366db08805277250a0767d4a4..60e0ec19c2b1d3d2389d362b82eae893d3932e29 100644
+--- a/extension/authentication/lib/usersRepository.js
++++ b/extension/authentication/lib/usersRepository.js
+@@ -70,8 +70,6 @@ UsersRepository.prototype.changePassword = function(currentUser, shortid, oldPas
+                 return q.reject(new Error("Invalid password"));
+             }
+ 
+-            console.log("updating " + currentUser.isAdmin + " " + !passwordHash.verify(oldPassword, user.password));
+-
+             context.users.attach(user);
+             user.password = passwordHash.generate(newPassword);
+ 
+diff --git a/extension/authentication/public/js/main_dev.js b/extension/authentication/public/js/main_dev.js
+index c3212cb5e4c4302b275d930cadb498f99df2d132..887b4a000423957efb4702fcd4dfbf99af9c240e 100644
+--- a/extension/authentication/public/js/main_dev.js
++++ b/extension/authentication/public/js/main_dev.js
+@@ -6,6 +6,10 @@ define(["app", "underscore", "marionette", "backbone",
+               UserDetailToolbarView, UserCreateDialog, ChangePasswordDialog) {
+ 
+         app.module("authentication", function (module) {
++
++            if (!app.settings.tenant)
++                return;
++
+             module.UsersListModel = UserListModel;
+ 
+             var Router = Backbone.Router.extend({
+
+From 5744ddb68e42247659839216d84c2db62765abae Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sat, 24 Jan 2015 23:30:13 +0100
+Subject: [PATCH] releasing 0.2.8
+
+---
+ extension/authentication/public/js/main_dev.js | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/extension/authentication/public/js/main_dev.js b/extension/authentication/public/js/main_dev.js
+index 887b4a000423957efb4702fcd4dfbf99af9c240e..21660ac31f2b001ef6568b0ca9f9524c5ad0cf3c 100644
+--- a/extension/authentication/public/js/main_dev.js
++++ b/extension/authentication/public/js/main_dev.js
+@@ -5,10 +5,10 @@ define(["app", "underscore", "marionette", "backbone",
+     function (app, _,  Marionette, Backbone, UserListModel, UserListView, UserListToolbarView, UserModel, UserDetailView,
+               UserDetailToolbarView, UserCreateDialog, ChangePasswordDialog) {
+ 
+-        app.module("authentication", function (module) {
++        if (!app.settings.tenant)
++            return;
+ 
+-            if (!app.settings.tenant)
+-                return;
++        app.module("authentication", function (module) {
+ 
+             module.UsersListModel = UserListModel;
+ 
+
+From 1d4b5caad830e524c7aaa918035aa634ac2d3b64 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Fri, 30 Jan 2015 20:12:46 +0100
+Subject: [PATCH] fixing bugs found during jsreportonline release
+
+---
+ extension/authentication/lib/authentication.js  | 30 +++++++++++++++----------
+ extension/authentication/lib/usersRepository.js | 20 ++++++++++-------
+ 2 files changed, 30 insertions(+), 20 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index df6d4799ccc6d58b3458437194a3cab5895c816f..53797a46fbabf03e47163e017a64790f46f076b1 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -20,7 +20,9 @@ var q = require("q"),
+     bodyParser = require("body-parser"),
+     UsersRepository = require("./usersRepository");
+ 
+-function configureRoutes(reporter, app, admin, definition) {
++function addPassport(reporter, app, admin, definition) {
++    if (app.isAuthenticated)
++        return;
+ 
+     app.use(sessions({
+         cookieName: 'session',
+@@ -107,17 +109,6 @@ function configureRoutes(reporter, app, admin, definition) {
+         res.redirect("/");
+     });
+ 
+-    app.use(function(req, res, next) {
+-        var publicRoute = _.find(reporter.authentication.publicRoutes, function (r) {
+-            return S(req.url).startsWith(r);
+-        });
+-
+-        var pathname = url.parse(req.url).pathname;
+-
+-        req.isPublic = publicRoute || S(pathname).endsWith(".js") || S(pathname).endsWith(".css");
+-        next();
+-    });
+-
+     app.use(function (req, res, next) {
+         if (!req.isAuthenticated() &&
+             (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1)) {
+@@ -139,6 +130,21 @@ function configureRoutes(reporter, app, admin, definition) {
+             next();
+         }
+     });
++}
++
++function configureRoutes(reporter, app, admin, definition) {
++    app.use(function(req, res, next) {
++        var publicRoute = _.find(reporter.authentication.publicRoutes, function (r) {
++            return S(req.url).startsWith(r);
++        });
++
++        var pathname = url.parse(req.url).pathname;
++
++        req.isPublic = publicRoute || S(pathname).endsWith(".js") || S(pathname).endsWith(".css");
++        next();
++    });
++
++    addPassport(reporter, app, admin, definition);
+ 
+     app.use(function (req, res, next) {
+         if (req.isAuthenticated() || req.isPublic) {
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+index 60e0ec19c2b1d3d2389d362b82eae893d3932e29..491ebd2ca20629defb4767193370910667d412e8 100644
+--- a/extension/authentication/lib/usersRepository.js
++++ b/extension/authentication/lib/usersRepository.js
+@@ -20,14 +20,7 @@ function UsersRepository(reporter) {
+     usersSet.beforeCreateListeners.add("repository", function(key, items) {
+         var user = items[0];
+ 
+-        return self.find(user.username).then(function(user) {
+-            if (user) {
+-                process.domain.req.customError = new Error("User already exists");
+-                return q.reject(process.domain.req.customError);
+-            }
+-
+-            return true;
+-        });
++        return self.validate(user);
+     });
+ 
+     this.UserType.addEventListener("beforeCreate", function(args, entity) {
+@@ -38,6 +31,17 @@ function UsersRepository(reporter) {
+     });
+ }
+ 
++UsersRepository.prototype.validate = function(user) {
++    return this.find(user.username).then(function(user) {
++        if (user) {
++            process.domain.req.customError = new Error("User already exists");
++            return q.reject(process.domain.req.customError);
++        }
++
++        return true;
++    });
++};
++
+ 
+ UsersRepository.prototype.authenticate = function(username, password) {
+     return this.reporter.dataProvider.startContext().then(function(context) {
+
+From 8de2c54ec35470618e47c25bb04212182ef5ab11 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Thu, 26 Mar 2015 17:15:19 +0100
+Subject: [PATCH] merge odata layer
+
+fix #50 #42 #25
+---
+ extension/authentication/lib/authentication.js     |  4 +-
+ extension/authentication/lib/usersRepository.js    | 88 ++++++++++------------
+ extension/authentication/public/js/main_dev.js     | 15 ----
+ .../public/js/user.changePassword.dialog.js        |  2 +-
+ .../authentication/public/js/user.list.model.js    | 13 ++--
+ extension/authentication/public/js/user.model.js   | 13 +---
+ .../authentication/test/authenticationTest.js      |  2 -
+ 7 files changed, 53 insertions(+), 84 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 53797a46fbabf03e47163e017a64790f46f076b1..f2314b97cbb99dd29a1c1a274733744f785e3d76 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -98,6 +98,7 @@ function addPassport(reporter, app, admin, definition) {
+                 if (err) {
+                     return next(err);
+                 }
++                reporter.logger.info("Logging in user " + user.username);
+ 
+                 return res.redirect(decodeURIComponent(req.query.returnUrl) || "/");
+             });
+@@ -123,6 +124,7 @@ function addPassport(reporter, app, admin, definition) {
+                 }
+ 
+                 req.logIn(user, function () {
++                    reporter.logger.debug("API logging in user " + user.username);
+                     next();
+                 });
+             })(req, res, next);
+@@ -179,7 +181,7 @@ function configureRoutes(reporter, app, admin, definition) {
+ 
+     app.post("/api/users/:shortid/password", function(req, res, next) {
+        reporter.authentication.usersRepository.changePassword(req.user, req.params.shortid,req.body.oldPassword,req.body.newPassword).then(function(user) {
+-            res.send("ok");
++            res.send({ result: "ok"});
+         }).catch(function(e) {
+             next(e);
+         });
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+index 491ebd2ca20629defb4767193370910667d412e8..bbf226d299fc409c495dcdfc03af2190c17d634a 100644
+--- a/extension/authentication/lib/usersRepository.js
++++ b/extension/authentication/lib/usersRepository.js
+@@ -6,33 +6,30 @@ function UsersRepository(reporter) {
+     var self = this;
+     this.reporter = reporter;
+ 
+-    var userAttributes = {
+-        _id: {type: "id", key: true, computed: true, nullable: false},
+-        shortid: {type: "string"},
+-        username: {type: "string"},
+-        password: {type: "string"}
+-    };
+-
+-
+-    this.UserType = this.reporter.dataProvider.createEntityType("UserType", userAttributes);
+-    var usersSet = this.reporter.dataProvider.registerEntitySet("users", this.UserType, { shared: true, tableOptions: {humanReadableKeys: ["shortid"]}});
++    this.UserType = this.reporter.documentStore.registerEntityType("UserType", {
++        _id: {type: "Edm.String", key: true},
++        shortid: {type: "Edm.String"},
++        username: {type: "Edm.String"},
++        password: {type: "Edm.String"}
++    });
+ 
+-    usersSet.beforeCreateListeners.add("repository", function(key, items) {
+-        var user = items[0];
++    this.reporter.documentStore.registerEntitySet("users", {entityType: "UserType", humanReadableKey: "shortid"});
+ 
+-        return self.validate(user);
+-    });
++    this.reporter.initializeListener.add("repository", function () {
++        var col = self.usersCollection = self.imagesCollection = self.reporter.documentStore.collection("users");
++        col.beforeInsertListeners.add("users", function (doc) {
++            if (!doc.shortid)
++                doc.shortid = shortid.generate();
+ 
+-    this.UserType.addEventListener("beforeCreate", function(args, entity) {
+-        if (!entity.shortid)
+-            entity.shortid = shortid.generate();
++            doc.password = passwordHash.generate(doc.password);
+ 
+-        entity.password = passwordHash.generate(entity.password);
++            return self.validate(doc);
++        });
+     });
+ }
+ 
+-UsersRepository.prototype.validate = function(user) {
+-    return this.find(user.username).then(function(user) {
++UsersRepository.prototype.validate = function (user) {
++    return this.find(user.username).then(function (user) {
+         if (user) {
+             process.domain.req.customError = new Error("User already exists");
+             return q.reject(process.domain.req.customError);
+@@ -43,42 +40,37 @@ UsersRepository.prototype.validate = function(user) {
+ };
+ 
+ 
+-UsersRepository.prototype.authenticate = function(username, password) {
+-    return this.reporter.dataProvider.startContext().then(function(context) {
+-        context.skipAuthorization = true;
+-        return context.users.filter(function(u) { return u.username === this.username; }, { username : username}).toArray().then(function(users) {
+-            if (users.length !== 1 || !passwordHash.verify(password, users[0].password))
+-                return null;
+-
+-            return users[0];
+-        });
++UsersRepository.prototype.authenticate = function (username, password) {
++    var query = {username: username};
++    process.domain.req.skipAuthorizationForQuery = query;
++    return this.usersCollection.find(query).then(function (users) {
++        if (users.length !== 1 || !passwordHash.verify(password, users[0].password))
++            return null;
++        return users[0];
+     });
+ };
+ 
+-UsersRepository.prototype.find = function(username) {
+-    return this.reporter.dataProvider.startContext().then(function(context) {
+-        context.skipAuthorization = true;
+-        return context.users.filter(function(u) { return u.username === this.username; }, { username : username}).toArray().then(function(users) {
+-            if (users.length !== 1)
+-                return null;
++UsersRepository.prototype.find = function (username) {
++    var query = {username: username};
++    process.domain.req.skipAuthorizationForQuery = query;
+ 
+-            return users[0];
+-        });
++    return this.usersCollection.find(query).then(function (users) {
++        if (users.length !== 1)
++            return null;
++
++        return users[0];
+     });
+ };
+ 
+-UsersRepository.prototype.changePassword = function(currentUser, shortid, oldPassword, newPassword) {
+-    return this.reporter.dataProvider.startContext().then(function(context) {
+-        return context.users.single(function(u) { return u.shortid === this.shortid; }, { shortid : shortid}).then(function(user) {
+-            if (!currentUser.isAdmin && !passwordHash.verify(oldPassword, user.password)) {
+-                return q.reject(new Error("Invalid password"));
+-            }
+-
+-            context.users.attach(user);
+-            user.password = passwordHash.generate(newPassword);
++UsersRepository.prototype.changePassword = function (currentUser, shortid, oldPassword, newPassword) {
++    var self = this;
++    return this.usersCollection.find({shortid: shortid}).then(function (users) {
++        var user = users[0];
++        if (!currentUser.isAdmin && !passwordHash.verify(oldPassword, user.password)) {
++            return q.reject(new Error("Invalid password"));
++        }
+ 
+-            return context.saveChanges();
+-        });
++        return self.usersCollection.update({shortid: shortid}, {$set: {password: passwordHash.generate(newPassword)}});
+     });
+ };
+ module.exports = UsersRepository;
+diff --git a/extension/authentication/public/js/main_dev.js b/extension/authentication/public/js/main_dev.js
+index 21660ac31f2b001ef6568b0ca9f9524c5ad0cf3c..e2af81b21a81f9353b8b03256d20f5fa0c066167 100644
+--- a/extension/authentication/public/js/main_dev.js
++++ b/extension/authentication/public/js/main_dev.js
+@@ -80,20 +80,5 @@ define(["app", "underscore", "marionette", "backbone",
+                     });
+                 }
+             });
+-
+-            app.on("entity-registration", function(context) {
+-                $data.Class.define("$entity.User", $data.Entity, null, {
+-                    '_id': { 'key': true, 'nullable': false, 'computed': true, 'type': 'Edm.String'},
+-                    'shortid': { 'type': 'Edm.String' },
+-                    'username': { 'type': 'Edm.String' },
+-                    "password": { type: "Edm.String" }
+-                }, null);
+-
+-                $entity.User.prototype.toString = function () {
+-                    return "User " + (this.username || "");
+-                };
+-
+-                context["users"] = { type: $data.EntitySet, elementType: $entity.User };
+-            });
+         });
+     });
+\ No newline at end of file
+diff --git a/extension/authentication/public/js/user.changePassword.dialog.js b/extension/authentication/public/js/user.changePassword.dialog.js
+index 2ae7d24e52223648b14bcf73d986454d878aaa08..0049ceeedff3f88f7399711ab15642857598f7c1 100644
+--- a/extension/authentication/public/js/user.changePassword.dialog.js
++++ b/extension/authentication/public/js/user.changePassword.dialog.js
+@@ -2,7 +2,7 @@ define(["app", "underscore", "marionette", "core/dataGrid", "core/view.base", "c
+ 
+     var ChangePasswordCommand = ModelBase.extend({
+         url: function() {
+-            return "users/" + this.get("shortid") + "/password";
++            return "/api/users/" + this.get("shortid") + "/password";
+         }
+     });
+ 
+diff --git a/extension/authentication/public/js/user.list.model.js b/extension/authentication/public/js/user.list.model.js
+index c467ae02c31e5bb13d65b932ae6e0dc5a601fddb..a86c9c148a439004e3743877b2405be86dc8fd5b 100644
+--- a/extension/authentication/public/js/user.list.model.js
++++ b/extension/authentication/public/js/user.list.model.js
+@@ -1,6 +1,11 @@
+ define(["app", "backbone", "core/dataGrid", "./user.model"], function (app, Backbone, DataGrid, UserModel) {
+     return Backbone.Collection.extend({
+ 
++        url: function() {
++            var qs =  this.filter.toOData();
++            return "odata/users?" + $.param(qs);
++        },
++
+         initialize: function () {
+             var self = this;
+             this.filter = new DataGrid.Filter.Base();
+@@ -10,16 +15,12 @@ define(["app", "backbone", "core/dataGrid", "./user.model"], function (app, Back
+         },
+ 
+         parse: function (data) {
+-            if (data.totalCount != null)
+-                this.filter.set("totalCount", data.totalCount);
++            if (this.meta && this.meta["@odata.count"])
++                this.filter.set("totalCount", this.meta["@odata.count"]);
+ 
+             return data;
+         },
+ 
+-        fetchQuery: function () {
+-            return app.dataContext.users.applyFilter(this.filter).toArray();
+-        },
+-
+         model: UserModel
+     });
+ });
+diff --git a/extension/authentication/public/js/user.model.js b/extension/authentication/public/js/user.model.js
+index 629b86c7301d3b5cad9da3d2945b0b88483c8895..000a29970c1832ebde55cdec3c8f4f9f1437dcfc 100644
+--- a/extension/authentication/public/js/user.model.js
++++ b/extension/authentication/public/js/user.model.js
+@@ -1,16 +1,7 @@
+-define(["app", "core/jaydataModel"], function(app, ModelBase) {
++define(["app", "core/basicModel"], function(app, ModelBase) {
+ 
+     return ModelBase.extend({
+-        contextSet: function() { return app.dataContext.users; },
+-
+-        fetchQuery: function (cb) {
+-            return this.contextSet().single(function(r) { return r.shortid === this.id; }, { id: this.get("shortid") });
+-        },
+-
+-        _initialize: function() {
+-            var self = this;
+-            this.Entity = $entity.User;
+-        },
++        odata: "users",
+ 
+         toString: function() {
+             return "User " + (this.get("username") || "");
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index 494388eaf22475628e132525508448067adfbf62..3260294765e9939bdf526ed02ddbfe57fc0ddea5 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -20,14 +20,12 @@ describeReporting(path.join(__dirname, "../../"), ["express", "authentication"],
+         it("should respond with login without cookie", function(done) {
+             request(reporter.options.express.app).get("/")
+                 .end(function (err, res) {
+-                    console.log(res);
+                     res.text.should.containEql("<h1>Login</h1>");
+                     done();
+                 });
+         });
+ 
+         it("should pass with auth cookie", function(done) {
+-
+             request(reporter.options.express.app).post('/login')
+                 .type('form')
+                 .send({ username: "admin", password:"password" })
+
+From be456c7aaae047c3bbdce01de376bc091ea53e10 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sun, 29 Mar 2015 15:11:11 +0200
+Subject: [PATCH] fixing last bugs for release 0.3
+
+---
+ extension/authentication/lib/authentication.js     | 50 +++++++++++-----------
+ extension/authentication/lib/usersRepository.js    |  2 +-
+ .../public/js/user.changePassword.dialog.js        |  2 +-
+ .../authentication/public/js/user.list.model.js    |  2 +-
+ extension/authentication/public/js/user.model.js   |  1 +
+ 5 files changed, 30 insertions(+), 27 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index f2314b97cbb99dd29a1c1a274733744f785e3d76..3836324c86b083b647054b5506df4a939ad2ed06 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -39,13 +39,13 @@ function addPassport(reporter, app, admin, definition) {
+             return done(null, admin);
+         }
+ 
+-        reporter.authentication.usersRepository.authenticate(username, password).then(function(user) {
++        reporter.authentication.usersRepository.authenticate(username, password).then(function (user) {
+             if (!user) {
+                 return done(null, false, {message: "Invalid password or user does not exists."});
+             }
+ 
+             return done(null, user);
+-        }).catch(function(e){
++        }).catch(function (e) {
+             done(null, false, {message: e.message});
+         });
+     }
+@@ -62,9 +62,9 @@ function addPassport(reporter, app, admin, definition) {
+         if (id === admin.username)
+             return done(null, admin);
+ 
+-        reporter.authentication.usersRepository.find(id).then(function(user) {
++        reporter.authentication.usersRepository.find(id).then(function (user) {
+             done(null, user);
+-        }).catch(function(e) {
++        }).catch(function (e) {
+             done(e);
+         });
+     });
+@@ -111,11 +111,18 @@ function addPassport(reporter, app, admin, definition) {
+     });
+ 
+     app.use(function (req, res, next) {
+-        if (!req.isAuthenticated() &&
+-            (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1)) {
++        if (req.isAuthenticated()) {
++            return next();
++        }
+ 
+-            passport.authenticate('basic', function (err, user, info) {
+-                if (!user) {
++        passport.authenticate('basic', function (err, user, info) {
++            if (user) {
++                req.logIn(user, function () {
++                    reporter.logger.debug("API logging in user " + user.username);
++                    next();
++                });
++            } else {
++                if (req.url.indexOf("/api") > -1 || req.url.indexOf("/odata") > -1) {
+                     if (req.isPublic) {
+                         return next();
+                     }
+@@ -123,19 +130,14 @@ function addPassport(reporter, app, admin, definition) {
+                     return res.status(401).end();
+                 }
+ 
+-                req.logIn(user, function () {
+-                    reporter.logger.debug("API logging in user " + user.username);
+-                    next();
+-                });
+-            })(req, res, next);
+-        } else {
+-            next();
+-        }
+-    });
++                next();
++            }
++        })(req, res, next);
++    });  
+ }
+ 
+ function configureRoutes(reporter, app, admin, definition) {
+-    app.use(function(req, res, next) {
++    app.use(function (req, res, next) {
+         var publicRoute = _.find(reporter.authentication.publicRoutes, function (r) {
+             return S(req.url).startsWith(r);
+         });
+@@ -163,7 +165,7 @@ function configureRoutes(reporter, app, admin, definition) {
+             return next();
+         }
+ 
+-        reporter.authorization.authorizeRequest(req, res).then(function(result) {
++        reporter.authorization.authorizeRequest(req, res).then(function (result) {
+             if (result) {
+                 return next();
+             }
+@@ -174,15 +176,15 @@ function configureRoutes(reporter, app, admin, definition) {
+             }
+ 
+             return res.redirect("/login");
+-        }).catch(function(e) {
++        }).catch(function (e) {
+             next(e);
+         });
+     });
+ 
+-    app.post("/api/users/:shortid/password", function(req, res, next) {
+-       reporter.authentication.usersRepository.changePassword(req.user, req.params.shortid,req.body.oldPassword,req.body.newPassword).then(function(user) {
+-            res.send({ result: "ok"});
+-        }).catch(function(e) {
++    app.post("/api/users/:shortid/password", function (req, res, next) {
++        reporter.authentication.usersRepository.changePassword(req.user, req.params.shortid, req.body.oldPassword, req.body.newPassword).then(function (user) {
++            res.send({result: "ok"});
++        }).catch(function (e) {
+             next(e);
+         });
+     });
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+index bbf226d299fc409c495dcdfc03af2190c17d634a..642485838273d87f2d3d48aeb0c166dfbdb920c2 100644
+--- a/extension/authentication/lib/usersRepository.js
++++ b/extension/authentication/lib/usersRepository.js
+@@ -13,7 +13,7 @@ function UsersRepository(reporter) {
+         password: {type: "Edm.String"}
+     });
+ 
+-    this.reporter.documentStore.registerEntitySet("users", {entityType: "UserType", humanReadableKey: "shortid"});
++    this.reporter.documentStore.registerEntitySet("users", {entityType: "jsreport.UserType", humanReadableKey: "shortid"});
+ 
+     this.reporter.initializeListener.add("repository", function () {
+         var col = self.usersCollection = self.imagesCollection = self.reporter.documentStore.collection("users");
+diff --git a/extension/authentication/public/js/user.changePassword.dialog.js b/extension/authentication/public/js/user.changePassword.dialog.js
+index 0049ceeedff3f88f7399711ab15642857598f7c1..ce63579594925785571c9cb5ea8bd020dd7c403e 100644
+--- a/extension/authentication/public/js/user.changePassword.dialog.js
++++ b/extension/authentication/public/js/user.changePassword.dialog.js
+@@ -2,7 +2,7 @@ define(["app", "underscore", "marionette", "core/dataGrid", "core/view.base", "c
+ 
+     var ChangePasswordCommand = ModelBase.extend({
+         url: function() {
+-            return "/api/users/" + this.get("shortid") + "/password";
++            return "api/users/" + this.get("shortid") + "/password";
+         }
+     });
+ 
+diff --git a/extension/authentication/public/js/user.list.model.js b/extension/authentication/public/js/user.list.model.js
+index a86c9c148a439004e3743877b2405be86dc8fd5b..f2d595d1cda5c28c917943e4a35b8053d0e75c90 100644
+--- a/extension/authentication/public/js/user.list.model.js
++++ b/extension/authentication/public/js/user.list.model.js
+@@ -8,7 +8,7 @@ define(["app", "backbone", "core/dataGrid", "./user.model"], function (app, Back
+ 
+         initialize: function () {
+             var self = this;
+-            this.filter = new DataGrid.Filter.Base();
++            this.filter = new DataGrid.Filter.Base({ searchProperty: "username"});
+             this.filter.bind("apply", function () {
+                 self.fetch();
+             });
+diff --git a/extension/authentication/public/js/user.model.js b/extension/authentication/public/js/user.model.js
+index 000a29970c1832ebde55cdec3c8f4f9f1437dcfc..c47d40ef1140c218fa8c66b8f18042892ec3de30 100644
+--- a/extension/authentication/public/js/user.model.js
++++ b/extension/authentication/public/js/user.model.js
+@@ -2,6 +2,7 @@ define(["app", "core/basicModel"], function(app, ModelBase) {
+ 
+     return ModelBase.extend({
+         odata: "users",
++        url: "odata/users",
+ 
+         toString: function() {
+             return "User " + (this.get("username") || "");
+
+From cabc0f16e2a147f279e3ee4ffd2a70e7677a3cff Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Thu, 23 Apr 2015 16:00:54 +0200
+Subject: [PATCH] #58 make sure that jsreport works correctly under subpath
+
+---
+ extension/authentication/lib/authentication.js           |  8 ++++++--
+ extension/authentication/public/js/main_dev.js           |  2 +-
+ extension/authentication/public/templates/user-info.html |  2 +-
+ extension/authentication/public/views/login.html         | 16 +++++++++++-----
+ 4 files changed, 19 insertions(+), 9 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 3836324c86b083b647054b5506df4a939ad2ed06..c417f2f35afb2d4b1cc1854dc66ba8d665a5d9e0 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -90,7 +90,10 @@ function addPassport(reporter, app, admin, definition) {
+ 
+             if (!user) {
+                 req.session.viewModel.login = info.message;
+-                return res.redirect('/login?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
++                //we cannot do just simple redirect to / because app can run on subpath
++                var url = req.originalUrl.replace("/login", "");
++                url = url.split('?')[0].split('#')[0];
++                return res.redirect(url + '?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
+             }
+ 
+             req.session.viewModel = {};
+@@ -107,7 +110,8 @@ function addPassport(reporter, app, admin, definition) {
+ 
+     app.post("/logout", function (req, res) {
+         req.logout();
+-        res.redirect("/");
++        //we cannot do just simple redirect to / because app can run on subpath
++        res.redirect(req.originalUrl.replace("logout", ""));
+     });
+ 
+     app.use(function (req, res, next) {
+diff --git a/extension/authentication/public/js/main_dev.js b/extension/authentication/public/js/main_dev.js
+index e2af81b21a81f9353b8b03256d20f5fa0c066167..a4cd190dbdf005efcda5db30922b778373b8ecec 100644
+--- a/extension/authentication/public/js/main_dev.js
++++ b/extension/authentication/public/js/main_dev.js
+@@ -55,7 +55,7 @@ define(["app", "underscore", "marionette", "backbone",
+ 
+             app.on("menu-render", function (context) {
+                 if (app.settings.tenant.isAdmin) {
+-                    context.result += "<li><a href='/#/extension/users/list'>Users</a></li>";
++                    context.result += "<li><a href='#/extension/users/list'>Users</a></li>";
+                 }
+             });
+ 
+diff --git a/extension/authentication/public/templates/user-info.html b/extension/authentication/public/templates/user-info.html
+index 812799d4fc008e7b4f526e8b2a2c9db3eca24e25..9acee268e53a4f506352e0609960e3d4cda4a0ad 100644
+--- a/extension/authentication/public/templates/user-info.html
++++ b/extension/authentication/public/templates/user-info.html
+@@ -12,7 +12,7 @@
+             {{/if}}
+             <a id='logoutLink' onclick=" $('#logoutBtn').click()"><i class="fa fa-power-off"></i> Logout </a>
+ 
+-            <form method="POST" action="/logout">
++            <form method="POST" action="{{:~getServerUrl()}}logout">
+                 <input type="submit" id="logoutBtn" style="display: none"/>
+             </form>
+         </li>
+diff --git a/extension/authentication/public/views/login.html b/extension/authentication/public/views/login.html
+index 5324f4de680ff7950a34904bc1f3ceef42416dbe..46568701fa05b7a6a755722822f0cdde1a616dcf 100644
+--- a/extension/authentication/public/views/login.html
++++ b/extension/authentication/public/views/login.html
+@@ -6,8 +6,8 @@
+     <link rel="shortcut icon" href="/img/favicon.ico">
+     <meta name="author" content="Jan Blaha">
+     <meta name="description" content="jsreport - javascript business reports">
+-    <link href="/css/font-awesome/css/font-awesome.min.css?v=" rel="stylesheet">
+-    <link href="/css/built.css?v=" rel="stylesheet">
++    <link href="css/font-awesome/css/font-awesome.min.css?v=" rel="stylesheet">
++    <link href="css/built.css?v=" rel="stylesheet">
+ </head>
+ <body>
+ <div class="container text-center">
+@@ -43,10 +43,16 @@
+ </div>
+ <script>
+     var form = document.getElementById("loginForm");
+-    if (window.location.pathname.lastIndexOf("/login", 0) === 0)
++    if (window.location.pathname.lastIndexOf("login", 0) === 0) {
+         form.action = window.location.pathname + window.location.search;
+-    else
+-    form.action = "/login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.hash + window.location.search);
++    }
++    else {
++        if (window.location.search.indexOf("returnUrl") === -1) {
++            form.action = "login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.hash + window.location.search);
++        } else {
++            form.action = "login" + window.location.search;
++        }
++    }
+ </script>
+ </body>
+ </html>
+
+From 2a947900d0d78a2741486b093699b8cff5c1b61e Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Wed, 29 Apr 2015 15:00:50 +0200
+Subject: [PATCH] fix of embed.js render -> post again into iframes better
+ support for running jsreport on subpath
+
+---
+ extension/authentication/lib/authentication.js   | 13 +++++--------
+ extension/authentication/public/views/login.html |  8 ++++----
+ 2 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index c417f2f35afb2d4b1cc1854dc66ba8d665a5d9e0..4e1ce621286be12890c53ceb143f281b4756af72 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -73,7 +73,7 @@ function addPassport(reporter, app, admin, definition) {
+         if (!req.user) {
+             var viewModel = _.extend({}, req.session.viewModel || {});
+             req.session.viewModel = null;
+-            return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel});
++            return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel, options: reporter.options});
+         }
+         else {
+             next();
+@@ -90,10 +90,7 @@ function addPassport(reporter, app, admin, definition) {
+ 
+             if (!user) {
+                 req.session.viewModel.login = info.message;
+-                //we cannot do just simple redirect to / because app can run on subpath
+-                var url = req.originalUrl.replace("/login", "");
+-                url = url.split('?')[0].split('#')[0];
+-                return res.redirect(url + '?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
++                return res.redirect(reporter.options.appPath + '?returnUrl=' + encodeURIComponent(req.query.returnUrl || "/"));
+             }
+ 
+             req.session.viewModel = {};
+@@ -110,8 +107,7 @@ function addPassport(reporter, app, admin, definition) {
+ 
+     app.post("/logout", function (req, res) {
+         req.logout();
+-        //we cannot do just simple redirect to / because app can run on subpath
+-        res.redirect(req.originalUrl.replace("logout", ""));
++        res.redirect(reporter.options.appPath);
+     });
+ 
+     app.use(function (req, res, next) {
+@@ -161,7 +157,8 @@ function configureRoutes(reporter, app, admin, definition) {
+ 
+         var viewModel = _.extend({}, req.session.viewModel || {});
+         req.session.viewModel = null;
+-        return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel});
++
++        return res.render(path.join(__dirname, '../public/views', 'login.html'), {viewModel: viewModel, options: reporter.options});
+     });
+ 
+     app.use(function (req, res, next) {
+diff --git a/extension/authentication/public/views/login.html b/extension/authentication/public/views/login.html
+index 46568701fa05b7a6a755722822f0cdde1a616dcf..b15149c770b671de8962b184d02985b5f0e9f167 100644
+--- a/extension/authentication/public/views/login.html
++++ b/extension/authentication/public/views/login.html
+@@ -6,8 +6,8 @@
+     <link rel="shortcut icon" href="/img/favicon.ico">
+     <meta name="author" content="Jan Blaha">
+     <meta name="description" content="jsreport - javascript business reports">
+-    <link href="css/font-awesome/css/font-awesome.min.css?v=" rel="stylesheet">
+-    <link href="css/built.css?v=" rel="stylesheet">
++    <link href="<%= options.appPath %>css/font-awesome/css/font-awesome.min.css?v=" rel="stylesheet">
++    <link href="<%= options.appPath %>css/built.css?v=" rel="stylesheet">
+ </head>
+ <body>
+ <div class="container text-center">
+@@ -48,9 +48,9 @@
+     }
+     else {
+         if (window.location.search.indexOf("returnUrl") === -1) {
+-            form.action = "login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.hash + window.location.search);
++            form.action = "<%= options.appPath %>login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.hash + window.location.search);
+         } else {
+-            form.action = "login" + window.location.search;
++            form.action = "<%= options.appPath %>login" + window.location.search;
+         }
+     }
+ </script>
+
+From b705cd1685ad152d54c327a13043bf915db3c1a3 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Sat, 16 May 2015 11:53:39 +0200
+Subject: [PATCH] client app extension
+
+---
+ extension/authentication/lib/authentication.js | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 4e1ce621286be12890c53ceb143f281b4756af72..43cc6ec014aca3f073a217ede4f99ba7590c6b43 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -189,6 +189,10 @@ function configureRoutes(reporter, app, admin, definition) {
+             next(e);
+         });
+     });
++
++    app.get("/api/current-user", function (req, res, next) {
++        res.send({ username: req.user.username });
++    });
+ }
+ 
+ function Authentication(reporter) {
+@@ -214,6 +218,7 @@ module.exports = function (reporter, definition) {
+     });
+ 
+     reporter.on("after-express-static-configure", function (app) {
++        reporter.emit("before-authentication-express-routes", app);
+         configureRoutes(reporter, app, definition.options.admin, definition);
+     });
+ };
+
+From 34c857caa4bc4a4218ccce183722d4f54aadf2f1 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Mon, 18 May 2015 08:33:28 +0200
+Subject: [PATCH] add user preference for client application feature
+
+---
+ extension/authentication/lib/authentication.js     |  1 +
+ .../public/js/user.detail.toolbar.view.js          | 27 ++++++++++++++++++++--
+ .../public/templates/user-detail-toolbar.html      |  5 ++--
+ 3 files changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index 43cc6ec014aca3f073a217ede4f99ba7590c6b43..e2f7c1b4f1c2c1e0c388b1072a09c14b22228ebc 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -220,5 +220,6 @@ module.exports = function (reporter, definition) {
+     reporter.on("after-express-static-configure", function (app) {
+         reporter.emit("before-authentication-express-routes", app);
+         configureRoutes(reporter, app, definition.options.admin, definition);
++        reporter.emit("after-authentication-express-routes", app);
+     });
+ };
+diff --git a/extension/authentication/public/js/user.detail.toolbar.view.js b/extension/authentication/public/js/user.detail.toolbar.view.js
+index a9cd12567ee6170bc506a47308cd008367ac1275..a99292c5b554683ae5af8b6a135ff64afdf0f6ea 100644
+--- a/extension/authentication/public/js/user.detail.toolbar.view.js
++++ b/extension/authentication/public/js/user.detail.toolbar.view.js
+@@ -1,5 +1,5 @@
+-define(["jquery", "app", "core/utils", "core/view.base", "./user.changePassword.dialog"],
+-    function($, app, Utils, LayoutBase, ChangePasswordDialog) {
++define(["jquery", "app", "marionette", "core/utils", "core/view.base", "./user.changePassword.dialog"],
++    function($, app, Marionette, Utils, LayoutBase, ChangePasswordDialog) {
+         return LayoutBase.extend({
+             template: "user-detail-toolbar",
+ 
+@@ -9,6 +9,29 @@ define(["jquery", "app", "core/utils", "core/view.base", "./user.changePassword.
+ 
+             },
+ 
++            initialize: function() {
++                var self = this;
++                this.listenTo(this.model, "change", function() {
++                    self.render();
++                });
++                this.listenTo(this, "render", function() {
++                    var contextToolbar = {
++                        name: "user-detail",
++                        model: self.model,
++                        region: self.extensionsToolbarRegion,
++                        view: self
++                    };
++                    app.trigger("toolbar-render", contextToolbar);
++                });
++            },
++
++            regions: {
++                extensionsToolbarRegion: {
++                    selector: "#extensionsToolbarBox",
++                    regionType: Marionette.MultiRegion
++                }
++            },
++
+             save: function() {
+                 if (!this.validate())
+                     return;
+diff --git a/extension/authentication/public/templates/user-detail-toolbar.html b/extension/authentication/public/templates/user-detail-toolbar.html
+index ddcbfa97a6f208bd16aee9d70c25a80f4c87b725..c5769e5a98e41005c38c32d931e43940631077b2 100644
+--- a/extension/authentication/public/templates/user-detail-toolbar.html
++++ b/extension/authentication/public/templates/user-detail-toolbar.html
+@@ -1,8 +1,9 @@
+ <div class="navbar-header submenu">
+-    <ul class="nav navbar-nav sub-header">
++    <ul class="nav navbar-nav sub-header" id="extensionsToolbarBox">
+         <li><a id="saveCommand"><i class="glyphicon glyphicon-floppy-save"></i>Save</a></li>
+     </ul>
+     <ul class="nav navbar-nav sub-header">
+         <li><a id="changePasswordCommand"><i class="glyphicon glyphicon-floppy-save"></i>Change Password</a></li>
+     </ul>
+-</div>
+\ No newline at end of file
++</div>
++
+
+From dc807ec68585ff25b1b77e26f39d61cd5b055372 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Thu, 28 May 2015 12:00:45 +0200
+Subject: [PATCH] split rendering part into the toner package
+
+---
+ extension/authentication/test/authenticationTest.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/extension/authentication/test/authenticationTest.js b/extension/authentication/test/authenticationTest.js
+index 3260294765e9939bdf526ed02ddbfe57fc0ddea5..b3459abe60bccd22ae91ebbeec8b7db5c6531ebd 100644
+--- a/extension/authentication/test/authenticationTest.js
++++ b/extension/authentication/test/authenticationTest.js
+@@ -6,7 +6,7 @@ var assert = require("assert"),
+     request = require('supertest'),
+     describeReporting = require("../../../test/helpers.js").describeReporting;
+ 
+-describeReporting(path.join(__dirname, "../../"), ["express", "authentication"], {
++describeReporting(path.join(__dirname, "../../../"), ["express", "authentication"], {
+     authentication: {
+         "cookieSession": {
+             "secret": "foo",
+
+From 487ccbbf7df1fb7f6a47548eceb49e3239f90ac0 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Mon, 22 Jun 2015 16:48:53 +0200
+Subject: [PATCH] fixes for mongo support
+
+---
+ extension/authentication/lib/authentication.js  | 2 ++
+ extension/authentication/lib/usersRepository.js | 3 ++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/extension/authentication/lib/authentication.js b/extension/authentication/lib/authentication.js
+index e2f7c1b4f1c2c1e0c388b1072a09c14b22228ebc..96544c2fbf08687b2080b37ad2fbb9ede51aa214 100644
+--- a/extension/authentication/lib/authentication.js
++++ b/extension/authentication/lib/authentication.js
+@@ -98,6 +98,8 @@ function addPassport(reporter, app, admin, definition) {
+                 if (err) {
+                     return next(err);
+                 }
++
++                req.user = user;
+                 reporter.logger.info("Logging in user " + user.username);
+ 
+                 return res.redirect(decodeURIComponent(req.query.returnUrl) || "/");
+diff --git a/extension/authentication/lib/usersRepository.js b/extension/authentication/lib/usersRepository.js
+index 642485838273d87f2d3d48aeb0c166dfbdb920c2..f51842a2baea53080df877b474ee3b4437f6b563 100644
+--- a/extension/authentication/lib/usersRepository.js
++++ b/extension/authentication/lib/usersRepository.js
+@@ -16,11 +16,12 @@ function UsersRepository(reporter) {
+     this.reporter.documentStore.registerEntitySet("users", {entityType: "jsreport.UserType", humanReadableKey: "shortid"});
+ 
+     this.reporter.initializeListener.add("repository", function () {
+-        var col = self.usersCollection = self.imagesCollection = self.reporter.documentStore.collection("users");
++        var col = self.usersCollection = self.reporter.documentStore.collection("users");
+         col.beforeInsertListeners.add("users", function (doc) {
+             if (!doc.shortid)
+                 doc.shortid = shortid.generate();
+ 
++            delete doc.passwordVerification;
+             doc.password = passwordHash.generate(doc.password);
+ 
+             return self.validate(doc);
+
+From 5f8d702dca7cb12a72f6e54ac77b1d5f777adff9 Mon Sep 17 00:00:00 2001
+From: "honza.pofider@seznam.cz" <honza.pofider@seznam.cz>
+Date: Tue, 15 Sep 2015 18:05:00 +0200
+Subject: [PATCH] support for command line rendering
+
+---
+ extension/authentication/jsreport.config.js | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/extension/authentication/jsreport.config.js b/extension/authentication/jsreport.config.js
+index 10173466368c3e61aa25c286565a2859247b3a45..9edcc510c047afa181684838a2f356632e5114a9 100644
+--- a/extension/authentication/jsreport.config.js
++++ b/extension/authentication/jsreport.config.js
+@@ -1,5 +1,6 @@
+ ﻿module.exports = {
+   "name": "authentication",
+   "main": "lib/authentication.js",
+-  "dependencies": []
++  "dependencies": [],
++  "skipInExeRender": true
+ }
+\ No newline at end of file
