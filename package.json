@@ -1,6 +1,6 @@
 {
   "name": "jsreport-authentication",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "jsreport extension adding user authentication",
   "scripts": {
     "test": "mocha test && standard"
