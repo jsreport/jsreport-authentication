@@ -7,6 +7,9 @@ describe('authentication', function () {
   var reporter
 
   beforeEach(function (done) {
+    // looks like a current bug in jsreport-express, it should start on random port by default
+    process.env.PORT = 0
+
     reporter = new Reporter({
       rootDirectory: path.join(__dirname, '../'),
       authentication: {
@@ -29,7 +32,7 @@ describe('authentication', function () {
         if (err) {
           return done(err)
         }
-        res.text.should.containEql('<h1>Login</h1>')
+        res.text.should.containEql('<h1>jsreport</h1>')
         done()
       })
   })
