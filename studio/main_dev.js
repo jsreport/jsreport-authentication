@@ -22,7 +22,8 @@ Studio.initializeListeners.unshift(async () => {
       faIcon: 'fa-user',
       visibleName: 'user',
       nameAttribute: 'username',
-      onNew: () => Studio.openModal(NewUserModal)
+      onNew: () => Studio.openModal(NewUserModal),
+      entityTreePosition: 200
     })
     Studio.addEditorComponent('users', UserEditor)
     Studio.addToolbarComponent(ChangePasswordButton)
