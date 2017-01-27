@@ -6,7 +6,7 @@ export default (props) => {
     <a
       id='changePassword'
       onClick={() => Studio.openModal(ChangePasswordModal, { entity: Studio.authentication.user })}
-      style={{cursor: 'pointer'}}><i className='fa fa-key'></i> Change password
+      style={{cursor: 'pointer'}}><i className='fa fa-key' /> Change password
     </a>
   </div>
 }
