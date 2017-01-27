@@ -30,6 +30,7 @@
   },
   "license": "LGPL",
   "dependencies": {
+    "bluebird": "3.4.7",
     "body-parser": "1.15.1",
     "client-sessions": "0.7.0",
     "ejs": "2.4.2",
@@ -38,7 +39,6 @@
     "passport-http": "0.3.0",
     "passport-local": "1.0.0",
     "password-hash": "1.2.2",
-    "q": "1.4.1",
     "shortid": "2.2.6",
     "string": "3.3.1",
     "underscore": "1.8.3"
@@ -58,6 +58,10 @@
     "supertest": "1.2.0"
   },
   "files": [
-    "lib", "public", "studio", "index.js", "jsreport.config.js"
+    "lib",
+    "public",
+    "studio",
+    "index.js",
+    "jsreport.config.js"
   ]
 }

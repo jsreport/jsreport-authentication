@@ -6,7 +6,7 @@ var Reporter = require('jsreport-core').Reporter
 describe('authentication', function () {
   var reporter
 
-  beforeEach(function (done) {
+  beforeEach(function () {
     // looks like a current bug in jsreport-express, it should start on random port by default
     process.env.PORT = 0
 
@@ -21,9 +21,7 @@ describe('authentication', function () {
       }
     })
 
-    reporter.init().then(function () {
-      done()
-    }).fail(done)
+    return reporter.init()
   })
 
   it('should respond with login without cookie', function (done) {
