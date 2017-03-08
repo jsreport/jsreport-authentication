@@ -22,4 +22,3 @@ export default class ChangePasswordButton extends Component {
     </div>
   }
 }
-

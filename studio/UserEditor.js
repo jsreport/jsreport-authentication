@@ -22,4 +22,3 @@ export default class DataEditor extends Component {
     </div>
   }
 }
-
