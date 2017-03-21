@@ -4,13 +4,13 @@
 
 > Add login screen to jsreport and user management forms
 
-See http://jsreport.net/learn/authentication
+See https://jsreport.net/learn/authentication
 
-##Installation
+## Installation
 
 > **npm install jsreport-authentication**
 
-##jsreport-core
+## jsreport-core
 You can apply this extension also manually to [jsreport-core](https://github.com/jsreport/jsreport-core)
 
 ```js
