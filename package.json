@@ -44,17 +44,17 @@
   },
   "author": "Jan Blaha",
   "devDependencies": {
-    "babel-eslint": "7.1.1",
-    "eslint": "3.17.1",
+    "babel-eslint": "7.2.1",
+    "eslint": "3.19.0",
     "eslint-config-standard-jsx": "3.3.0",
     "eslint-plugin-babel": "4.1.1",
     "in-publish": "2.0.0",
-    "jsreport-core": "1.2.1",
-    "jsreport-express": "1.2.0",
+    "jsreport-core": "1.2.2",
+    "jsreport-express": "1.2.2",
     "jsreport-studio-dev": "1.0.2",
     "mocha": "3.2.0",
-    "should": "11.2.0",
-    "standard": "9.0.1",
+    "should": "11.2.1",
+    "standard": "9.0.2",
     "supertest": "3.0.0"
   },
   "files": [
