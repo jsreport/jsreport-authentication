@@ -3,6 +3,7 @@
   "version": "1.2.0",
   "description": "jsreport extension adding user authentication",
   "scripts": {
+    "start": "jsreport-studio-start --httpPort 5488",
     "test": "mocha test --timeout 10000 && standard",
     "build": "npm run prepublish",
     "prepublish": "in-publish && jsreport-studio-build || not-in-publish"
