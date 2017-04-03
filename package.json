@@ -5,7 +5,7 @@
   "scripts": {
     "start": "jsreport-studio-start --httpPort 5488",
     "test": "mocha test --timeout 10000 && standard",
-    "build": "npm run prepublish",
+    "build": "jsreport-studio-build",
     "prepublish": "in-publish && jsreport-studio-build || not-in-publish"
   },
   "homepage": "https://github.com/jsreport/jsreport-authentication",
