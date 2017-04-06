@@ -4,7 +4,7 @@
   "description": "jsreport extension adding user authentication",
   "scripts": {
     "start": "jsreport-studio-start --httpPort 5488",
-    "test": "mocha test --timeout 10000 && standard",
+    "test": "mocha \"./test/*.spec.js\" --timeout 10000 && standard",
     "build": "jsreport-studio-build",
     "prepublish": "in-publish && jsreport-studio-build || not-in-publish"
   },
@@ -51,6 +51,7 @@
     "eslint": "3.19.0",
     "eslint-config-standard-jsx": "3.3.0",
     "eslint-plugin-babel": "4.1.1",
+    "express": "4.15.2",
     "in-publish": "2.0.0",
     "jsreport-core": "1.2.2",
     "jsreport-express": "1.2.2",
