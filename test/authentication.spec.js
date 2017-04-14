@@ -2,6 +2,7 @@ require('should')
 var path = require('path')
 var crypto = require('crypto')
 var request = require('supertest')
+var cloneDeep = require('lodash.clonedeep')
 var Reporter = require('jsreport-core').Reporter
 var createAuthServer = require('./authServer')
 
@@ -140,8 +141,8 @@ describe('authentication with external authorization server', function () {
           })
         }
 
-        _originalOpts.auth = _originalOpts.auth || options.auth
-        _originalOpts.authServer = _originalOpts.authServer || options.authServer
+        _originalOpts.auth = _originalOpts.auth || cloneDeep(options.auth)
+        _originalOpts.authServer = _originalOpts.authServer || cloneDeep(options.authServer)
 
         return originalSetup(_originalOpts)
       }
@@ -250,6 +251,24 @@ describe('authentication with external authorization server', function () {
       })
     })
 
+    it('should 401 when calling api that returns invalid scope', function () {
+      return setup({
+        endpoint: '/reply-body',
+        scope: {
+          valid: ['jsreport']
+        }
+      }).then(function (info) {
+        var reporter = info.reporter
+
+        return (
+          request(reporter.express.app)
+          .post('/api/auth-server/token')
+          .set('Authorization', 'Bearer invalidToken')
+          .expect(401)
+        )
+      })
+    })
+
     it('should 200 when calling api with valid token', function () {
       if (!tokenFromAuthServer) {
         throw new Error('no token value found to use in test')
@@ -290,6 +309,59 @@ describe('authentication with external authorization server', function () {
           .then(function (response) {
             response.body.user.should.be.eql('admin')
             response.body.enabled.should.be.True()
+          })
+        )
+      })
+    })
+
+    it('should 200 when calling api and validating scope', function () {
+      if (!tokenFromAuthServer) {
+        throw new Error('no token value found to use in test')
+      }
+
+      return setup({
+        scope: {
+          valid: ['jsreport']
+        }
+      }).then(function (info) {
+        var reporter = info.reporter
+
+        return (
+          request(reporter.express.app)
+          .post('/api/auth-server/token')
+          .set('Authorization', 'Bearer ' + tokenFromAuthServer)
+          .expect(200)
+          .then(function (response) {
+            response.body.username.should.be.eql('admin')
+            response.body.active.should.be.True()
+            response.body.scope.should.matchAny('jsreport')
+          })
+        )
+      })
+    })
+
+    it('should 200 when calling api and validating scope with custom field name', function () {
+      if (!tokenFromAuthServer) {
+        throw new Error('no token value found to use in test')
+      }
+
+      return setup({
+        scope: {
+          field: 'scopeRole',
+          valid: ['jsreport']
+        }
+      }).then(function (info) {
+        var reporter = info.reporter
+
+        return (
+          request(reporter.express.app)
+          .post('/api/auth-server/token')
+          .set('Authorization', 'Bearer ' + tokenFromAuthServer)
+          .expect(200)
+          .then(function (response) {
+            response.body.username.should.be.eql('admin')
+            response.body.active.should.be.True()
+            response.body.scopeRole.should.matchAny('jsreport')
           })
         )
       })
@@ -340,6 +412,10 @@ describe('authentication with external authorization server', function () {
       jsreportConfig.authentication.authorizationServer.tokenValidation.activeField = options.activeField
     }
 
+    if (options.scope) {
+      jsreportConfig.authentication.authorizationServer.tokenValidation.scope = options.scope
+    }
+
     if (options.custom) {
       jsreportConfig = options.custom
     }
@@ -359,6 +435,10 @@ describe('authentication with external authorization server', function () {
 
       if (options.activeField) {
         authServerOpts.activeField = options.activeField
+      }
+
+      if (options.scope) {
+        authServerOpts.scope = options.scope
       }
     }
 
