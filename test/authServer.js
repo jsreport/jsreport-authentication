@@ -14,6 +14,8 @@ module.exports = function createAuthServer (_options) {
   var mainTokenUsername
   var usernameField = options.usernameField || 'username'
   var activeField = options.activeField || 'active'
+  var scopeField = (options.scope && options.scope.field) || 'scope'
+  var validScopes = (options.scope && options.scope.valid) || []
 
   app.use(bodyParser.urlencoded({ extended: false }))
   app.use(bodyParser.json())
@@ -82,6 +84,10 @@ module.exports = function createAuthServer (_options) {
 
     if (isValid) {
       payload[usernameField] = mainTokenUsername
+
+      if (validScopes.length) {
+        payload[scopeField] = validScopes
+      }
     }
 
     res.status(200).json(payload)
