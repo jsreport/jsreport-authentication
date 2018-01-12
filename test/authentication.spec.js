@@ -62,6 +62,13 @@ describe('authentication', function () {
       .set('Authorization', 'Basic ' + new Buffer('admin:password').toString('base64'))
       .expect(200, done)
   })
+
+  it('should 400 when returnUrl is absolute', function (done) {
+    request(reporter.express.app).post('/login?returnUrl=https://jsreport.net')
+      .type('form')
+      .send({username: 'admin', password: 'password'})
+      .expect(400, done)
+  })
 })
 
 describe('authentication with external authorization server', function () {
