@@ -1,15 +1,16 @@
+process.env.debug = 'jsreport'
 require('should')
-var path = require('path')
-var crypto = require('crypto')
-var request = require('supertest')
-var cloneDeep = require('lodash.clonedeep')
-var Reporter = require('jsreport-core').Reporter
-var createAuthServer = require('./authServer')
+const path = require('path')
+const crypto = require('crypto')
+const request = require('supertest')
+const cloneDeep = require('lodash.clonedeep')
+const Reporter = require('jsreport-core').Reporter
+const createAuthServer = require('./authServer')
 
-describe('authentication', function () {
-  var reporter
+describe('authentication', () => {
+  let reporter
 
-  beforeEach(function () {
+  beforeEach(() => {
     // looks like a current bug in jsreport-express, it should start on random port by default
     process.env.PORT = 0
 
@@ -27,53 +28,45 @@ describe('authentication', function () {
     return reporter.init()
   })
 
-  it('should respond with login without cookie', function (done) {
-    request(reporter.express.app).get('/')
-      .end(function (err, res) {
-        if (err) {
-          return done(err)
-        }
-        res.text.should.containEql('<h1>jsreport</h1>')
-        done()
-      })
+  afterEach(() => reporter.close())
+
+  it('should respond with login without cookie', () => {
+    return request(reporter.express.app)
+      .get('/')
+      .expect(/<h1>jsreport<\/h1>/)
   })
 
-  it('should pass with auth cookie', function (done) {
-    request(reporter.express.app).post('/login')
+  it('should pass with auth cookie', async () => {
+    const res = await request(reporter.express.app).post('/login')
       .type('form')
       .send({username: 'admin', password: 'password'})
-      .end(function (err, res) {
-        if (err) {
-          return done(err)
-        }
 
-        request(reporter.express.app).get('/api/version')
-          .set('cookie', res.headers['set-cookie'])
-          .expect(200, done)
-      })
+    return request(reporter.express.app).get('/api/version')
+      .set('cookie', res.headers['set-cookie'])
+      .expect(200)
   })
 
-  it('should 401 when calling api without auth header', function (done) {
-    request(reporter.express.app).get('/api/version')
-      .expect(401, done)
+  it('should 401 when calling api without auth header', () => {
+    return request(reporter.express.app).get('/api/version')
+      .expect(401)
   })
 
-  it('should 200 when calling api with auth header', function (done) {
-    request(reporter.express.app).get('/api/version')
-      .set('Authorization', 'Basic ' + new Buffer('admin:password').toString('base64'))
-      .expect(200, done)
+  it('should 200 when calling api with auth header', () => {
+    return request(reporter.express.app).get('/api/version')
+      .set('Authorization', 'Basic ' + Buffer.from('admin:password').toString('base64'))
+      .expect(200)
   })
 
-  it('should 400 when returnUrl is absolute', function (done) {
-    request(reporter.express.app).post('/login?returnUrl=https://jsreport.net')
+  it('should 400 when returnUrl is absolute', () => {
+    return request(reporter.express.app).post('/login?returnUrl=https://jsreport.net')
       .type('form')
       .send({username: 'admin', password: 'password'})
-      .expect(400, done)
+      .expect(400)
   })
 })
 
-describe('authentication with external authorization server', function () {
-  it('should throw when not configuring minimum options', function () {
+describe('authentication with external authorization server', () => {
+  it('should throw when not configuring minimum options', () => {
     return setupReporterForAuthServer({
       custom: {
         rootDirectory: path.join(__dirname, '../'),
@@ -90,8 +83,8 @@ describe('authentication with external authorization server', function () {
     }).should.be.rejectedWith(Error)
   })
 
-  describe('when auth server is public', function () {
-    var mainToken = crypto.randomBytes(48).toString('hex')
+  describe('when auth server is public', () => {
+    const mainToken = crypto.randomBytes(48).toString('hex')
 
     common({
       authServer: {
@@ -103,8 +96,8 @@ describe('authentication with external authorization server', function () {
     })
   })
 
-  describe('when auth server requires authentication', function () {
-    var authOptions = {
+  describe('when auth server requires authentication', () => {
+    const authOptions = {
       type: 'basic',
       basic: {
         clientId: 'client',
@@ -112,7 +105,7 @@ describe('authentication with external authorization server', function () {
       }
     }
 
-    var mainToken = crypto.randomBytes(48).toString('hex')
+    const mainToken = crypto.randomBytes(48).toString('hex')
 
     common({
       authServer: {
@@ -130,10 +123,10 @@ describe('authentication with external authorization server', function () {
   })
 
   function common (_options) {
-    var options = _options || {}
-    var originalSetup = options.setup || setupReporterForAuthServer
-    var tokenFromAuthServer
-    var setup
+    let options = _options || {}
+    let originalSetup = options.setup || setupReporterForAuthServer
+    let tokenFromAuthServer
+    let setup
 
     if (options.authServer && options.authServer.token) {
       tokenFromAuthServer = options.authServer.token.value
@@ -157,233 +150,179 @@ describe('authentication with external authorization server', function () {
       setup = originalSetup
     }
 
-    it('should send data as form urlencoded by default', function () {
-      return setup({ endpoint: '/reply-body' }).then(function (info) {
-        var reporter = info.reporter
+    it('should send data as form urlencoded by default', async () => {
+      const { reporter } = await setup({ endpoint: '/reply-body' })
 
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer test')
-          .expect(200)
-          .then(function (response) {
-            response.body.isFormEncoded.should.be.True()
-            response.body.data.token.should.be.eql('test')
-            response.body.data['token_type_hint'].should.be.eql('access_token')
-          })
-        )
-      })
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer test')
+        .expect(200)
+
+      response.body.isFormEncoded.should.be.True()
+      response.body.data.token.should.be.eql('test')
+      response.body.data['token_type_hint'].should.be.eql('access_token')
     })
 
-    it('should send data as json', function () {
-      return setup({ endpoint: '/reply-body', sendAsJSON: true }).then(function (info) {
-        var reporter = info.reporter
+    it('should send data as json', async () => {
+      const { reporter } = await setup({ endpoint: '/reply-body', sendAsJSON: true })
 
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer test')
-          .expect(200)
-          .then(function (response) {
-            response.body.isJson.should.be.True()
-            response.body.data.token.should.be.eql('test')
-            response.body.data['token_type_hint'].should.be.eql('access_token')
-          })
-        )
-      })
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer test')
+        .expect(200)
+
+      response.body.isJson.should.be.True()
+      response.body.data.token.should.be.eql('test')
+      response.body.data['token_type_hint'].should.be.eql('access_token')
     })
 
-    it('should support sending custom values (hints)', function () {
-      return setup({
+    it('should support sending custom values (hints)', async () => {
+      const { reporter } = await setup({
         endpoint: '/reply-body',
         hint: {
           name: 'custom',
           value: 'some value'
         }
-      }).then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer test')
-          .expect(200)
-          .then(function (response) {
-            response.body.data.token.should.be.eql('test')
-            response.body.data['token_type_hint'].should.be.eql('access_token')
-            response.body.data.custom.should.be.eql('some value')
-          })
-        )
       })
+
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer test')
+        .expect(200)
+
+      response.body.data.token.should.be.eql('test')
+      response.body.data['token_type_hint'].should.be.eql('access_token')
+      response.body.data.custom.should.be.eql('some value')
     })
 
-    it('should respond with timeout error when request to auth server takes too long', function () {
-      return setup({ endpoint: '/timeout' }).then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer test')
-          .expect(500)
-          .then(function (response) {
-            response.error.text.should.match(/Timeout error/)
-          })
-        )
-      })
+    it('should respond with timeout error when request to auth server takes too long', async () => {
+      const { reporter } = await setup({ endpoint: '/timeout' })
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer test')
+        .expect(500)
+      response.error.text.should.match(/Timeout error/)
     })
 
-    it('should 401 when calling api without auth header', function () {
-      return setup().then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .expect(401)
-        )
-      })
+    it('should 401 when calling api without auth header', async () => {
+      const { reporter } = await setup()
+      return request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .expect(401)
     })
 
-    it('should 401 when calling api with invalid token', function () {
-      return setup().then(function (info) {
-        var reporter = info.reporter
+    it('should 401 when calling api with invalid token', async () => {
+      const { reporter } = await setup()
 
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer invalidToken')
-          .expect(401)
-        )
-      })
+      return request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer invalidToken')
+        .expect(401)
     })
 
-    it('should 401 when calling api that returns invalid scope', function () {
-      return setup({
+    it('should 401 when calling api that returns invalid scope', async () => {
+      const { reporter } = await setup({
         endpoint: '/reply-body',
         scope: {
           valid: ['jsreport']
         }
-      }).then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer invalidToken')
-          .expect(401)
-        )
       })
+
+      return request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer invalidToken')
+        .expect(401)
     })
 
-    it('should 200 when calling api with valid token', function () {
+    it('should 200 when calling api with valid token', async () => {
       if (!tokenFromAuthServer) {
         throw new Error('no token value found to use in test')
       }
 
-      return setup().then(function (info) {
-        var reporter = info.reporter
+      const { reporter } = await setup()
 
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer ' + tokenFromAuthServer)
-          .expect(200)
-          .then(function (response) {
-            response.body.username.should.be.eql('admin')
-            response.body.active.should.be.True()
-          })
-        )
-      })
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer ' + tokenFromAuthServer)
+        .expect(200)
+
+      response.body.username.should.be.eql('admin')
+      response.body.active.should.be.True()
     })
 
-    it('should 200 when calling api with valid token and custom "username" and "active" field names', function () {
+    it('should 200 when calling api with valid token and custom "username" and "active" field names', async () => {
       if (!tokenFromAuthServer) {
         throw new Error('no token value found to use in test')
       }
 
-      return setup({
+      const { reporter } = await setup({
         usernameField: 'user',
         activeField: 'enabled'
-      }).then(function (info) {
-        var reporter = info.reporter
+      })
 
-        return (
-          request(reporter.express.app)
+      const response = await
+        request(reporter.express.app)
           .post('/api/auth-server/token')
           .set('Authorization', 'Bearer ' + tokenFromAuthServer)
           .expect(200)
-          .then(function (response) {
-            response.body.user.should.be.eql('admin')
-            response.body.enabled.should.be.True()
-          })
-        )
-      })
+
+      response.body.user.should.be.eql('admin')
+      response.body.enabled.should.be.True()
     })
 
-    it('should 200 when calling api and validating scope', function () {
+    it('should 200 when calling api and validating scope', async () => {
       if (!tokenFromAuthServer) {
         throw new Error('no token value found to use in test')
       }
 
-      return setup({
+      const { reporter } = await setup({
         scope: {
           valid: ['jsreport']
         }
-      }).then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer ' + tokenFromAuthServer)
-          .expect(200)
-          .then(function (response) {
-            response.body.username.should.be.eql('admin')
-            response.body.active.should.be.True()
-            response.body.scope.should.matchAny('jsreport')
-          })
-        )
       })
+
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer ' + tokenFromAuthServer)
+        .expect(200)
+
+      response.body.username.should.be.eql('admin')
+      response.body.active.should.be.True()
+      response.body.scope.should.matchAny('jsreport')
     })
 
-    it('should 200 when calling api and validating scope with custom field name', function () {
+    it('should 200 when calling api and validating scope with custom field name', async () => {
       if (!tokenFromAuthServer) {
         throw new Error('no token value found to use in test')
       }
 
-      return setup({
+      const { reporter } = await setup({
         scope: {
           field: 'scopeRole',
           valid: ['jsreport']
         }
-      }).then(function (info) {
-        var reporter = info.reporter
-
-        return (
-          request(reporter.express.app)
-          .post('/api/auth-server/token')
-          .set('Authorization', 'Bearer ' + tokenFromAuthServer)
-          .expect(200)
-          .then(function (response) {
-            response.body.username.should.be.eql('admin')
-            response.body.active.should.be.True()
-            response.body.scopeRole.should.matchAny('jsreport')
-          })
-        )
       })
+
+      const response = await request(reporter.express.app)
+        .post('/api/auth-server/token')
+        .set('Authorization', 'Bearer ' + tokenFromAuthServer)
+        .expect(200)
+
+      response.body.username.should.be.eql('admin')
+      response.body.active.should.be.True()
+      response.body.scopeRole.should.matchAny('jsreport')
     })
   }
 
-  function setupReporterForAuthServer (_options) {
-    var options = _options || {}
+  async function setupReporterForAuthServer (_options) {
+    const options = _options || {}
     var authServerOpts
-    var reporter
+    let reporter
 
     // looks like a current bug in jsreport-express, it should start on random port by default
     process.env.PORT = 0
 
-    var jsreportConfig = {
+    let jsreportConfig = {
       rootDirectory: path.join(__dirname, '../'),
       authentication: {
         'cookieSession': {
@@ -452,26 +391,23 @@ describe('authentication with external authorization server', function () {
     if (!authServerOpts) {
       reporter = new Reporter(jsreportConfig)
 
-      return reporter.init().then(function () {
-        return {
-          reporter: reporter
-        }
-      })
+      await reporter.init()
+      return {
+        reporter: reporter
+      }
     }
 
-    return createAuthServer(authServerOpts).then(function (authInfo) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.endpoint = (
-        'http://localhost:' + authInfo.port + (options.endpoint || '/token/introspection')
-      )
+    const authInfo = await createAuthServer(authServerOpts)
+    jsreportConfig.authentication.authorizationServer.tokenValidation.endpoint = (
+      'http://localhost:' + authInfo.port + (options.endpoint || '/token/introspection')
+    )
 
-      reporter = new Reporter(jsreportConfig)
+    reporter = new Reporter(jsreportConfig)
 
-      return reporter.init().then(function () {
-        return {
-          reporter: reporter,
-          authServer: authInfo
-        }
-      })
-    })
+    await reporter.init()
+    return {
+      reporter: reporter,
+      authServer: authInfo
+    }
   }
 })
