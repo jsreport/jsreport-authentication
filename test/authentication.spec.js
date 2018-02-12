@@ -4,17 +4,14 @@ const path = require('path')
 const crypto = require('crypto')
 const request = require('supertest')
 const cloneDeep = require('lodash.clonedeep')
-const Reporter = require('jsreport-core').Reporter
+const jsreport = require('jsreport-core')
 const createAuthServer = require('./authServer')
 
 describe('authentication', () => {
   let reporter
 
   beforeEach(() => {
-    // looks like a current bug in jsreport-express, it should start on random port by default
-    process.env.PORT = 0
-
-    reporter = new Reporter({
+    reporter = jsreport({
       rootDirectory: path.join(__dirname, '../'),
       authentication: {
         'cookieSession': {
@@ -62,6 +59,21 @@ describe('authentication', () => {
       .type('form')
       .send({username: 'admin', password: 'password'})
       .expect(400)
+  })
+
+  it('should add the req.context.user', () => {
+    return new Promise((resolve, reject) => {
+      reporter.documentStore.collection('templates').beforeFindListeners.add('test', this, (q, proj, req) => {
+        if (!req.context.user || !req.context.user.username) {
+          return reject(new Error('req.context.user not set'))
+        }
+        resolve()
+      })
+
+      request(reporter.express.app).get('/odata/templates')
+        .set('Authorization', 'Basic ' + Buffer.from('admin:password').toString('base64'))
+        .expect(200).catch(reject)
+    })
   })
 })
 
@@ -389,7 +401,7 @@ describe('authentication with external authorization server', () => {
     }
 
     if (!authServerOpts) {
-      reporter = new Reporter(jsreportConfig)
+      reporter = jsreport(jsreportConfig)
 
       await reporter.init()
       return {
@@ -402,7 +414,7 @@ describe('authentication with external authorization server', () => {
       'http://localhost:' + authInfo.port + (options.endpoint || '/token/introspection')
     )
 
-    reporter = new Reporter(jsreportConfig)
+    reporter = jsreport(jsreportConfig)
 
     await reporter.init()
     return {

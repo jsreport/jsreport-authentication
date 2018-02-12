@@ -55,6 +55,7 @@
     "jsreport-core": "jsreport/jsreport-core#2.0.0-beta",
     "jsreport-express": "jsreport/jsreport-express#2.0.0-beta",
     "jsreport-studio-dev": "1.1.2",
+    "jsreport-templates": "github:jsreport/jsreport-templates#2.0.0-beta",
     "lodash.clonedeep": "4.5.0",
     "mocha": "5.0.0",
     "should": "13.2.1",
