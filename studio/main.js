@@ -96,7 +96,7 @@
 	
 	        case 5:
 	
-	          _jsreportStudio2.default.authentication = { user: response.tenant };
+	          _jsreportStudio2.default.authentication = { user: response.tenant, useEditorComponents: [] };
 	
 	          if (_jsreportStudio2.default.authentication.user.isAdmin) {
 	            _jsreportStudio2.default.addEntitySet({
@@ -189,7 +189,9 @@
 	  }, {
 	    key: 'render',
 	    value: function render() {
-	      var entity = this.props.entity;
+	      var _props = this.props,
+	          entity = _props.entity,
+	          onUpdate = _props.onUpdate;
 	
 	
 	      return _react2.default.createElement(
@@ -201,6 +203,17 @@
 	          _react2.default.createElement('i', { className: 'fa fa-user' }),
 	          ' ',
 	          entity.username
+	        ),
+	        _react2.default.createElement(
+	          'div',
+	          null,
+	          _jsreportStudio2.default.authentication.useEditorComponents.map(function (c, i) {
+	            return _react2.default.createElement(
+	              'div',
+	              { key: i },
+	              c(entity, onUpdate)
+	            );
+	          })
 	        )
 	      );
 	    }
