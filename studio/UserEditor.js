@@ -10,12 +10,12 @@ export default class DataEditor extends Component {
   }
 
   render () {
-    const { entity } = this.props
+    const { entity, onUpdate } = this.props
 
     return <div className='custom-editor'>
       <h1><i className='fa fa-user' /> {entity.username}</h1>
       <div>
-        {Studio.authentication.useEditorComponents.map((c) => c(entity))}
+        {Studio.authentication.useEditorComponents.map((c, i) => <div key={i}>{c(entity, onUpdate)}</div>)}
       </div>
     </div>
   }
