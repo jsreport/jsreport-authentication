@@ -14,6 +14,9 @@ export default class DataEditor extends Component {
 
     return <div className='custom-editor'>
       <h1><i className='fa fa-user' /> {entity.username}</h1>
+      <div>
+        {Studio.authentication.useEditorComponents.map((c) => c(entity))}
+      </div>
     </div>
   }
 }

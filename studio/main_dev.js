@@ -14,7 +14,7 @@ Studio.initializeListeners.unshift(async () => {
     return
   }
 
-  Studio.authentication = { user: response.tenant }
+  Studio.authentication = { user: response.tenant, useEditorComponents: [] }
 
   if (Studio.authentication.user.isAdmin) {
     Studio.addEntitySet({
