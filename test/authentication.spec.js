@@ -13,12 +13,14 @@ describe('authentication', () => {
   beforeEach(() => {
     reporter = jsreport({
       rootDirectory: path.join(__dirname, '../'),
-      authentication: {
-        'cookieSession': {
-          'secret': 'foo',
-          'cookie': { 'domain': 'local.net' }
-        },
-        admin: { username: 'admin', password: 'password' }
+      extensions: {
+        authentication: {
+          'cookieSession': {
+            'secret': 'foo',
+            'cookie': { 'domain': 'local.net' }
+          },
+          admin: { username: 'admin', password: 'password' }
+        }
       }
     })
 
@@ -82,13 +84,15 @@ describe('authentication with external authorization server', () => {
     return setupReporterForAuthServer({
       custom: {
         rootDirectory: path.join(__dirname, '../'),
-        authentication: {
-          'cookieSession': {
-            'secret': 'foo'
-          },
-          admin: { username: 'admin', password: 'password' },
-          authorizationServer: {
-            tokenValidation: {}
+        extensions: {
+          authentication: {
+            'cookieSession': {
+              'secret': 'foo'
+            },
+            admin: { username: 'admin', password: 'password' },
+            authorizationServer: {
+              tokenValidation: {}
+            }
           }
         }
       }
@@ -336,42 +340,44 @@ describe('authentication with external authorization server', () => {
 
     let jsreportConfig = {
       rootDirectory: path.join(__dirname, '../'),
-      authentication: {
-        'cookieSession': {
-          'secret': 'foo'
-        },
-        admin: { username: 'admin', password: 'password' },
-        authorizationServer: {
-          tokenValidation: {
-            timeout: 3000,
-            auth: false
+      extensions: {
+        authentication: {
+          'cookieSession': {
+            'secret': 'foo'
+          },
+          admin: { username: 'admin', password: 'password' },
+          authorizationServer: {
+            tokenValidation: {
+              timeout: 3000,
+              auth: false
+            }
           }
         }
       }
     }
 
     if (options.auth) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.auth = options.auth
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.auth = options.auth
     }
 
     if (options.sendAsJSON) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.sendAsJSON = options.sendAsJSON
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.sendAsJSON = options.sendAsJSON
     }
 
     if (options.hint) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.hint = options.hint
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.hint = options.hint
     }
 
     if (options.usernameField) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.usernameField = options.usernameField
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.usernameField = options.usernameField
     }
 
     if (options.activeField) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.activeField = options.activeField
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.activeField = options.activeField
     }
 
     if (options.scope) {
-      jsreportConfig.authentication.authorizationServer.tokenValidation.scope = options.scope
+      jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.scope = options.scope
     }
 
     if (options.custom) {
@@ -410,7 +416,7 @@ describe('authentication with external authorization server', () => {
     }
 
     const authInfo = await createAuthServer(authServerOpts)
-    jsreportConfig.authentication.authorizationServer.tokenValidation.endpoint = (
+    jsreportConfig.extensions.authentication.authorizationServer.tokenValidation.endpoint = (
       'http://localhost:' + authInfo.port + (options.endpoint || '/token/introspection')
     )
 
