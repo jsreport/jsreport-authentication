@@ -9,7 +9,7 @@ module.exports = {
           cookieSession: {
             type: 'object',
             properties: {
-              cookie: { type: 'string' },
+              cookie: { type: 'object' },
               secret: { type: 'string' }
             }
           },
@@ -49,18 +49,22 @@ module.exports = {
                     }
                   },
                   auth: {
-                    type: 'object',
-                    properties: {
-                      type: { type: 'string', enum: ['basic', 'bearer'] },
-                      basic: {
-                        type: 'object',
-                        properties: {
-                          clientId: { type: 'string' },
-                          clientSecret: { type: 'string' }
-                        }
-                      },
-                      bearer: { type: 'string' }
-                    }
+                    anyOf: [{
+                      type: 'boolean'
+                    }, {
+                      type: 'object',
+                      properties: {
+                        type: { type: 'string', enum: ['basic', 'bearer'] },
+                        basic: {
+                          type: 'object',
+                          properties: {
+                            clientId: { type: 'string' },
+                            clientSecret: { type: 'string' }
+                          }
+                        },
+                        bearer: { type: 'string' }
+                      }
+                    }]
                   }
                 }
               }
