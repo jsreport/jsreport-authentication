@@ -2,10 +2,6 @@ import React, {Component, PropTypes} from 'react'
 import Studio from 'jsreport-studio'
 
 export default class NewUserModal extends Component {
-  static propTypes = {
-    close: PropTypes.func.isRequired
-  }
-
   constructor () {
     super()
     this.state = {}
@@ -77,4 +73,8 @@ export default class NewUserModal extends Component {
       </div>
     </div>
   }
+}
+
+NewUserModal.propTypes = {
+  close: PropTypes.func.isRequired
 }

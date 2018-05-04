@@ -2,11 +2,6 @@ import React, {Component, PropTypes} from 'react'
 import Studio from 'jsreport-studio'
 
 export default class ChangePasswordModal extends Component {
-  static propTypes = {
-    close: PropTypes.func.isRequired,
-    options: PropTypes.object.isRequired
-  }
-
   constructor () {
     super()
     this.state = {}
@@ -66,4 +61,9 @@ export default class ChangePasswordModal extends Component {
       </div>
     </div>
   }
+}
+
+ChangePasswordModal.propTypes = {
+  close: PropTypes.func.isRequired,
+  options: PropTypes.object.isRequired
 }

@@ -1,21 +1,20 @@
-
-var Promise = require('bluebird')
-var Passport = require('passport').Passport
-var BasicStrategy = require('passport-http').BasicStrategy
-var express = require('express')
-var bodyParser = require('body-parser')
-var passport = new Passport()
+const Promise = require('bluebird')
+const Passport = require('passport').Passport
+const BasicStrategy = require('passport-http').BasicStrategy
+const express = require('express')
+const bodyParser = require('body-parser')
+const passport = new Passport()
 
 module.exports = function createAuthServer (_options) {
-  var options = _options || {}
-  var app = express()
-  var mainUser
-  var mainToken
-  var mainTokenUsername
-  var usernameField = options.usernameField || 'username'
-  var activeField = options.activeField || 'active'
-  var scopeField = (options.scope && options.scope.field) || 'scope'
-  var validScopes = (options.scope && options.scope.valid) || []
+  const options = _options || {}
+  const app = express()
+  let mainUser
+  let mainToken
+  let mainTokenUsername
+  const usernameField = options.usernameField || 'username'
+  const activeField = options.activeField || 'active'
+  const scopeField = (options.scope && options.scope.field) || 'scope'
+  const validScopes = (options.scope && options.scope.valid) || []
 
   app.use(bodyParser.urlencoded({ extended: false }))
   app.use(bodyParser.json())
@@ -31,7 +30,7 @@ module.exports = function createAuthServer (_options) {
 
     app.use(passport.initialize())
 
-    passport.use(new BasicStrategy(function (username, password, done) {
+    passport.use(new BasicStrategy((username, password, done) => {
       if (username === mainUser.username && password === mainUser.password) {
         return done(null, mainUser)
       }
@@ -42,14 +41,14 @@ module.exports = function createAuthServer (_options) {
     app.use('/', passport.authenticate('basic', { session: false }))
   }
 
-  app.post('/reply-body', function (req, res) {
-    var isUrlEncoded = req.is('urlencoded')
-    var isJson = req.is('json')
+  app.post('/reply-body', (req, res) => {
+    let isUrlEncoded = req.is('urlencoded')
+    let isJson = req.is('json')
 
     isUrlEncoded = (isUrlEncoded === 'urlencoded') ? true : isUrlEncoded
     isJson = (isJson === 'json') ? true : isJson
 
-    var payload = {
+    const payload = {
       isFormEncoded: isUrlEncoded,
       isJson: isJson,
       data: req.body
@@ -61,10 +60,10 @@ module.exports = function createAuthServer (_options) {
     res.status(200).json(payload)
   })
 
-  app.post('/timeout', function (req, res) {
-    var payload = {}
+  app.post('/timeout', (req, res) => {
+    const payload = {}
 
-    setTimeout(function () {
+    setTimeout(() => {
       payload[activeField] = true
       payload[usernameField] = 'admin'
 
@@ -72,13 +71,13 @@ module.exports = function createAuthServer (_options) {
     }, 10000)
   })
 
-  app.post('/token/introspection', function (req, res) {
+  app.post('/token/introspection', (req, res) => {
     if (!mainToken) {
       return res.status(500).end()
     }
 
-    var payload = {}
-    var isValid = (mainToken === req.body.token)
+    const payload = {}
+    const isValid = (mainToken === req.body.token)
 
     payload[activeField] = isValid
 
@@ -93,13 +92,13 @@ module.exports = function createAuthServer (_options) {
     res.status(200).json(payload)
   })
 
-  app.use(function (err, req, res, next) {
+  app.use((err, req, res, next) => {
     console.error('final error handler in auth server:', err)
     res.status(500).end()
   })
 
-  return new Promise(function (resolve, reject) {
-    var isServerBound = false
+  return new Promise((resolve, reject) => {
+    let isServerBound = false
 
     // start on random port
     app.listen(0, function () {
@@ -111,11 +110,9 @@ module.exports = function createAuthServer (_options) {
       })
     })
 
-    app.on('error', function (err) {
+    app.on('error', (err) => {
       if (!isServerBound) {
-        app.close(function () {
-          reject(err)
-        })
+        app.close(() => reject(err))
       }
     })
   })

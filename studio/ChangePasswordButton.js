@@ -3,11 +3,6 @@ import ChangePasswordModal from './ChangePasswordModal.js'
 import Studio from 'jsreport-studio'
 
 export default class ChangePasswordButton extends Component {
-  static propTypes = {
-    tab: React.PropTypes.object,
-    onUpdate: React.PropTypes.func.isRequired
-  }
-
   render () {
     if (!this.props.tab || !this.props.tab.entity || this.props.tab.entity.__entitySet !== 'users') {
       return <span />
@@ -21,4 +16,9 @@ export default class ChangePasswordButton extends Component {
       </div>
     </div>
   }
+}
+
+ChangePasswordButton.propTypes = {
+  tab: React.PropTypes.object,
+  onUpdate: React.PropTypes.func.isRequired
 }
