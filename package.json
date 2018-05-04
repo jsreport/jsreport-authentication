@@ -35,7 +35,6 @@
     "body-parser": "1.18.2",
     "client-sessions": "0.8.0",
     "ejs": "2.5.7",
-    "is-number-like": "1.0.8",
     "passport": "0.4.0",
     "passport-http": "0.3.0",
     "passport-http-bearer": "1.0.1",
@@ -70,6 +69,6 @@
     "jsreport.config.js"
   ],
   "engines": {
-    "node": ">=8.0"
+    "node": ">=8.9"
   }
 }
