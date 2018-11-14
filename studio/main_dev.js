@@ -22,7 +22,7 @@ Studio.initializeListeners.unshift(async () => {
       faIcon: 'fa-user',
       visibleName: 'user',
       nameAttribute: 'username',
-      onNew: () => Studio.openModal(NewUserModal),
+      onNew: (options) => Studio.openModal(NewUserModal, options),
       entityTreePosition: 200
     })
     Studio.addEditorComponent('users', UserEditor)

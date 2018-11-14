@@ -8,6 +8,12 @@ export default class NewUserModal extends Component {
   }
 
   async createUser () {
+    let entity = {}
+
+    if (this.props.options.defaults != null) {
+      entity = Object.assign(entity, this.props.options.defaults)
+    }
+
     if (!this.refs.username.value) {
       return this.setState({ userNameError: true })
     }
@@ -16,13 +22,14 @@ export default class NewUserModal extends Component {
       return this.setState({ passwordError: true })
     }
 
+    entity.username = this.refs.username.value
+    entity.password = this.refs.password1.value
+
     try {
       let response = await Studio.api.post('/odata/users', {
-        data: {
-          username: this.refs.username.value,
-          password: this.refs.password1.value
-        }
+        data: entity
       })
+
       response.__entitySet = 'users'
 
       Studio.addExistingEntity(response)
