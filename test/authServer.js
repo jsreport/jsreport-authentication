@@ -1,4 +1,3 @@
-const Promise = require('bluebird')
 const Passport = require('passport').Passport
 const BasicStrategy = require('passport-http').BasicStrategy
 const express = require('express')
