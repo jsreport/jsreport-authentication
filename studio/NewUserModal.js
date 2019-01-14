@@ -63,11 +63,11 @@ export default class NewUserModal extends Component {
       </div>
       <div className='form-group'>
         <label>Password</label>
-        <input type='password' ref='password1' />
+        <input type='password' autoComplete='off' ref='password1' />
       </div>
       <div className='form-group'>
         <label>Password verification</label>
-        <input type='password' ref='password2' onChange={() => this.validatePassword()} />
+        <input type='password' autoComplete='off' ref='password2' onChange={() => this.validatePassword()} />
       </div>
       <div className='form-group'>
         <span style={{color: 'red', display: this.state.passwordError ? 'block' : 'none'}}>password doesn't match</span>

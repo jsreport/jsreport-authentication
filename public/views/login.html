@@ -72,9 +72,9 @@
         <div class="login-page">
             <div class="form">
                 <h1>jsreport</h1>
-                <form class="login-form" id="loginForm" method="POST">
+                <form class="login-form" id="loginForm" method="POST" autocomplete="off">
                     <input type="text" id="username" name="username" placeholder="username" />
-                    <input type="password" name="password" type="password" placeholder="password" />
+                    <input type="password" name="password" type="password" placeholder="password" autocomplete="off" />
 
                     <% if (viewModel.login) { %>
                     <div class="form-group" style="color: red;">
