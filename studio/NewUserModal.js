@@ -7,6 +7,16 @@ export default class NewUserModal extends Component {
     this.state = {}
   }
 
+  componentDidMount () {
+    setTimeout(() => this.refs.username.focus(), 0)
+  }
+
+  handleKeyPress (e) {
+    if (e.key === 'Enter') {
+      this.createUser()
+    }
+  }
+
   async createUser () {
     let entity = {}
 
@@ -59,7 +69,7 @@ export default class NewUserModal extends Component {
     return <div>
       <div className='form-group'>
         <label>Username</label>
-        <input type='text' ref='username' onChange={() => this.validateUsername()} />
+        <input type='text' ref='username' onChange={() => this.validateUsername()} onKeyPress={(e) => this.handleKeyPress(e)} />
       </div>
       <div className='form-group'>
         <label>Password</label>
