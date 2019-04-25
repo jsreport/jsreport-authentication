@@ -35,5 +35,5 @@ jsreport.config.json
 .idea
 
 # temporary disable
-studio/main.js
-studio/main.js.map
+# studio/main.js
+# studio/main.js.map
