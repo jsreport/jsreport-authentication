@@ -31,15 +31,15 @@
   },
   "license": "LGPL",
   "dependencies": {
-    "body-parser": "1.18.3",
+    "axios": "0.19.2",
+    "body-parser": "1.19.0",
     "client-sessions": "0.8.0",
     "ejs": "2.6.2",
     "passport": "0.4.0",
     "passport-http": "0.3.0",
     "passport-http-bearer": "1.0.1",
     "passport-local": "1.0.0",
-    "password-hash": "1.2.2",
-    "request": "2.88.0"
+    "password-hash": "1.2.2"
   },
   "author": "Jan Blaha",
   "devDependencies": {
@@ -47,10 +47,10 @@
     "eslint": "4.17.0",
     "eslint-config-standard-jsx": "4.0.2",
     "eslint-plugin-babel": "4.1.2",
-    "express": "4.16.4",
+    "express": "4.17.1",
     "in-publish": "2.0.0",
-    "jsreport-core": "github:jsreport/jsreport-core#encryption",
-    "jsreport-express": "2.5.0",
+    "jsreport-core": "2.7.0",
+    "jsreport-express": "2.6.0",
     "jsreport-studio-dev": "1.5.0",
     "jsreport-templates": "2.3.2",
     "lodash.clonedeep": "4.5.0",

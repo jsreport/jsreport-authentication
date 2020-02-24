@@ -217,7 +217,7 @@ describe('authentication with external authorization server', () => {
         .post('/api/auth-server/token')
         .set('Authorization', 'Bearer test')
         .expect(500)
-      response.error.text.should.match(/Timeout error/)
+      response.error.text.should.match(/timeout/)
     })
 
     it('should 401 when calling api without auth header', async () => {
