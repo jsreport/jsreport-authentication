@@ -1,6 +1,6 @@
 {
   "name": "jsreport-authentication",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "jsreport extension adding user authentication",
   "scripts": {
     "start": "jsreport-studio-start --httpPort 5488",
