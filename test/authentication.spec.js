@@ -3,14 +3,17 @@ require('should')
 const path = require('path')
 const crypto = require('crypto')
 const request = require('supertest')
+const should = require('should')
 const cloneDeep = require('lodash.clonedeep')
 const jsreport = require('jsreport-core')
 const createAuthServer = require('./authServer')
 
+const CUSTOM_USER = { username: 'jsreport', password: 'jsreport' }
+
 describe('authentication', () => {
   let reporter
 
-  beforeEach(() => {
+  beforeEach(async () => {
     reporter = jsreport({
       rootDirectory: path.join(__dirname, '../'),
       extensions: {
@@ -24,7 +27,9 @@ describe('authentication', () => {
       }
     })
 
-    return reporter.init()
+    await reporter.init()
+
+    await reporter.documentStore.collection('users').insert({ ...CUSTOM_USER })
   })
 
   afterEach(() => reporter.close())
@@ -75,6 +80,502 @@ describe('authentication', () => {
       request(reporter.express.app).get('/odata/templates')
         .set('Authorization', 'Basic ' + Buffer.from('admin:password').toString('base64'))
         .expect(200).catch(reject)
+    })
+  })
+
+  describe('login block', () => {
+    const tryLogin = (user) => {
+      let cookie
+
+      return async function (useCorrectCredentials) {
+        let req = request(reporter.express.app).post('/login')
+
+        if (cookie) {
+          req = req.set('cookie', cookie)
+        }
+
+        let res = (
+          await req.type('form')
+            .send({username: user.username, password: useCorrectCredentials ? user.password : 'nonvalid'})
+            .expect(302)
+        )
+
+        cookie = res.headers['set-cookie']
+
+        res = await request(reporter.express.app).get('/login').set('cookie', cookie)
+
+        cookie = res.headers['set-cookie']
+
+        return res
+      }
+    }
+
+    const tryApiLogin = (user) => {
+      return async function (useCorrectCredentials) {
+        const res = (
+          await request(reporter.express.app)
+            .get('/api/version')
+            .set('Authorization', 'Basic ' + Buffer.from(`${user.username}:${useCorrectCredentials ? user.password : 'nonvalid'}`).toString('base64'))
+        )
+
+        return res
+      }
+    }
+
+    function common (user) {
+      it('should block login attempts after reaching limit', async () => {
+        const login = tryLogin(user)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq >= reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+      })
+
+      it('should block successful login after reaching limit', async () => {
+        const login = tryLogin(user)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login(seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+      })
+
+      it('should block login attempts after reaching limit (http api)', async () => {
+        const login = tryApiLogin(user)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          tries.push(i)
+        }
+
+        // eslint-disable-next-line no-unused-vars
+        for (let i of tries) {
+          const res = await login()
+          const seq = i + 1
+
+          if (seq >= reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.statusCode).be.eql(401)
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+      })
+
+      it('should block successful login after reaching limit (http api)', async () => {
+        const login = tryApiLogin(user)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login(seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.statusCode).be.eql(401)
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+      })
+    }
+
+    describe('admin user', () => {
+      common({ username: 'admin', password: 'password' })
+    })
+
+    describe('custom user', () => {
+      it('failed login should increase failed login count', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        let res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        let currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+
+        res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(2)
+      })
+
+      it('successful login should not increase failed login count', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        let res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        let currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+
+        res = await login(true)
+
+        // login page should be not found after successfull login
+        should(res.statusCode).be.eql(404)
+
+        currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+      })
+
+      it('failed login should increase failed login count', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        let res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        let currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+
+        res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(2)
+      })
+
+      it('successful login should not increase failed login count (http api)', async () => {
+        const login = tryApiLogin(CUSTOM_USER)
+        let res = await login()
+
+        should(res.statusCode).be.eql(401)
+        should(res.text).containEql('password or user does not exist')
+
+        let currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+
+        res = await login(true)
+
+        should(res.statusCode).be.eql(200)
+
+        currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+      })
+
+      it('failed login should increase failed login count (http api)', async () => {
+        const login = tryApiLogin(CUSTOM_USER)
+        let res = await login()
+
+        should(res.statusCode).be.eql(401)
+        should(res.text).containEql('password or user does not exist')
+
+        let currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+
+        res = await login()
+
+        should(res.statusCode).be.eql(401)
+        should(res.text).containEql('password or user does not exist')
+
+        currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(2)
+      })
+
+      common(CUSTOM_USER)
+
+      it('should allow login after the block time has passed', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login(true)
+
+        // login page should be not found after successfull login
+        should(res.statusCode).be.eql(404)
+      })
+
+      it('should reset stored failed attempts to 0 after block time has passed', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        const tries = []
+
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login(true)
+
+        // login page should be not found after successfull login
+        should(res.statusCode).be.eql(404)
+
+        const currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(0)
+      })
+
+      it('should reset stored failed attempts to 1 after block time has passed', async () => {
+        const login = tryLogin(CUSTOM_USER)
+        const tries = []
+
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login()
+
+        should(res.text).containEql('password or user does not exist')
+
+        const currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+      })
+
+      it('should allow login after the block time has passed (http api)', async () => {
+        const login = tryApiLogin(CUSTOM_USER)
+        const tries = []
+
+        // add extra try for login attempts
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.statusCode).be.eql(401)
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login(true)
+
+        should(res.statusCode).be.eql(200)
+      })
+
+      it('should reset stored failed attempts to 0 after block time has passed (http api)', async () => {
+        const login = tryApiLogin(CUSTOM_USER)
+        const tries = []
+
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.statusCode).be.eql(401)
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login(true)
+
+        should(res.statusCode).be.eql(200)
+
+        const currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(0)
+      })
+
+      it('should reset stored failed attempts to 1 after block time has passed', async () => {
+        const login = tryApiLogin(CUSTOM_USER)
+        const tries = []
+
+        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
+          tries.push(i)
+        }
+
+        for (let i of tries) {
+          const seq = i + 1
+          const res = await login()
+
+          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+            should(res.statusCode).be.eql(403)
+            should(res.text).containEql('Max attempts to login has been reached')
+          } else {
+            should(res.statusCode).be.eql(401)
+            should(res.text).containEql('password or user does not exist')
+          }
+        }
+
+        await reporter.documentStore.collection('users').update({
+          username: CUSTOM_USER.username
+        }, {
+          $set: {
+            // 10 mins ago
+            failedLoginAttemptsStart: new Date(new Date().getTime() - (10 * 60 * 1000))
+          }
+        })
+
+        const res = await login()
+
+        should(res.statusCode).be.eql(401)
+        should(res.text).containEql('password or user does not exist')
+
+        const currentUser = await reporter.documentStore.collection('users').findOne({
+          username: CUSTOM_USER.username
+        })
+
+        should(currentUser.failedLoginAttemptsCount).be.eql(1)
+      })
     })
   })
 })
