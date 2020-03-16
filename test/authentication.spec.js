@@ -125,18 +125,11 @@ describe('authentication', () => {
     function common (user) {
       it('should block login attempts after reaching limit', async () => {
         const login = tryLogin(user)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq >= reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i >= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
             should(res.text).containEql('password or user does not exist')
@@ -146,20 +139,11 @@ describe('authentication', () => {
 
       it('should block successful login after reaching limit', async () => {
         const login = tryLogin(user)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
-          tries.push(i)
-        }
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          const res = await login(i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
 
-        for (let i of tries) {
-          const seq = i + 1
-          const res = await login(seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
-
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
-            should(res.text).containEql('Max attempts to login has been reached')
-          } else if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
             should(res.text).containEql('password or user does not exist')
@@ -169,19 +153,11 @@ describe('authentication', () => {
 
       it('should block login attempts after reaching limit (http api)', async () => {
         const login = tryApiLogin(user)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
-          tries.push(i)
-        }
-
-        // eslint-disable-next-line no-unused-vars
-        for (let i of tries) {
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
-          const seq = i + 1
 
-          if (seq >= reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i >= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.statusCode).be.eql(403)
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
@@ -193,21 +169,11 @@ describe('authentication', () => {
 
       it('should block successful login after reaching limit (http api)', async () => {
         const login = tryApiLogin(user)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
-          tries.push(i)
-        }
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
+          const res = await login(i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
 
-        for (let i of tries) {
-          const seq = i + 1
-          const res = await login(seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1)
-
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
-            should(res.statusCode).be.eql(403)
-            should(res.text).containEql('Max attempts to login has been reached')
-          } else if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.statusCode).be.eql(403)
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
@@ -346,18 +312,11 @@ describe('authentication', () => {
 
       it('should allow login after the block time has passed', async () => {
         const login = tryLogin(CUSTOM_USER)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
             should(res.text).containEql('password or user does not exist')
@@ -381,17 +340,11 @@ describe('authentication', () => {
 
       it('should reset stored failed attempts to 0 after block time has passed', async () => {
         const login = tryLogin(CUSTOM_USER)
-        const tries = []
 
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
             should(res.text).containEql('password or user does not exist')
@@ -421,17 +374,11 @@ describe('authentication', () => {
 
       it('should reset stored failed attempts to 1 after block time has passed', async () => {
         const login = tryLogin(CUSTOM_USER)
-        const tries = []
 
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
             should(res.text).containEql('password or user does not exist')
@@ -460,18 +407,11 @@ describe('authentication', () => {
 
       it('should allow login after the block time has passed (http api)', async () => {
         const login = tryApiLogin(CUSTOM_USER)
-        const tries = []
 
-        // add extra try for login attempts
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.statusCode).be.eql(403)
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
@@ -496,17 +436,11 @@ describe('authentication', () => {
 
       it('should reset stored failed attempts to 0 after block time has passed (http api)', async () => {
         const login = tryApiLogin(CUSTOM_USER)
-        const tries = []
 
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.statusCode).be.eql(403)
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
@@ -537,17 +471,11 @@ describe('authentication', () => {
 
       it('should reset stored failed attempts to 1 after block time has passed', async () => {
         const login = tryApiLogin(CUSTOM_USER)
-        const tries = []
 
-        for (let i = 0; i < reporter.authentication.usersRepository.maxFailedLoginAttempts; i++) {
-          tries.push(i)
-        }
-
-        for (let i of tries) {
-          const seq = i + 1
+        for (let i = 1; i <= reporter.authentication.usersRepository.maxFailedLoginAttempts + 1; i++) {
           const res = await login()
 
-          if (seq === reporter.authentication.usersRepository.maxFailedLoginAttempts) {
+          if (i === reporter.authentication.usersRepository.maxFailedLoginAttempts + 1) {
             should(res.statusCode).be.eql(403)
             should(res.text).containEql('Max attempts to login has been reached')
           } else {
