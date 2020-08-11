@@ -5,11 +5,16 @@ import Studio from 'jsreport-studio'
 export default class NewUserModal extends Component {
   constructor () {
     super()
+
+    this.usernameRef = React.createRef()
+    this.password1Ref = React.createRef()
+    this.password2Ref = React.createRef()
+
     this.state = {}
   }
 
   componentDidMount () {
-    setTimeout(() => this.refs.username.focus(), 0)
+    setTimeout(() => this.usernameRef.current.focus(), 0)
   }
 
   handleKeyPress (e) {
@@ -25,16 +30,16 @@ export default class NewUserModal extends Component {
       entity = Object.assign(entity, this.props.options.defaults)
     }
 
-    if (!this.refs.username.value) {
+    if (!this.usernameRef.current.value) {
       return this.setState({ userNameError: true })
     }
 
-    if (!this.refs.password1.value) {
+    if (!this.password1Ref.current.value) {
       return this.setState({ passwordError: true })
     }
 
-    entity.username = this.refs.username.value
-    entity.password = this.refs.password1.value
+    entity.username = this.usernameRef.current.value
+    entity.password = this.password1Ref.current.value
 
     try {
       let response = await Studio.api.post('/odata/users', {
@@ -53,7 +58,7 @@ export default class NewUserModal extends Component {
   validatePassword () {
     this.setState(
       {
-        passwordError: this.refs.password2.value && this.refs.password2.value !== this.refs.password1.value,
+        passwordError: this.password2Ref.current.value && this.password2Ref.current.value !== this.password1Ref.current.value,
         apiError: null
       })
   }
@@ -61,7 +66,7 @@ export default class NewUserModal extends Component {
   validateUsername () {
     this.setState(
       {
-        userNameError: this.refs.username.value === '',
+        userNameError: this.usernameRef.current.value === '',
         apiError: null
       })
   }
@@ -70,15 +75,15 @@ export default class NewUserModal extends Component {
     return <div>
       <div className='form-group'>
         <label>Username</label>
-        <input type='text' ref='username' onChange={() => this.validateUsername()} onKeyPress={(e) => this.handleKeyPress(e)} />
+        <input type='text' ref={this.usernameRef} onChange={() => this.validateUsername()} onKeyPress={(e) => this.handleKeyPress(e)} />
       </div>
       <div className='form-group'>
         <label>Password</label>
-        <input type='password' autoComplete='off' ref='password1' />
+        <input type='password' autoComplete='off' ref={this.password1Ref} />
       </div>
       <div className='form-group'>
         <label>Password verification</label>
-        <input type='password' autoComplete='off' ref='password2' onChange={() => this.validatePassword()} />
+        <input type='password' autoComplete='off' ref={this.password2Ref} onChange={() => this.validatePassword()} />
       </div>
       <div className='form-group'>
         <span style={{color: 'red', display: this.state.passwordError ? 'block' : 'none'}}>password doesn't match</span>

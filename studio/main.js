@@ -140,10 +140,14 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 var ChangePasswordModal = function (_Component) {
   _inherits(ChangePasswordModal, _Component);
 
-  function ChangePasswordModal() {
+  function ChangePasswordModal(props) {
     _classCallCheck(this, ChangePasswordModal);
 
-    var _this = _possibleConstructorReturn(this, (ChangePasswordModal.__proto__ || Object.getPrototypeOf(ChangePasswordModal)).call(this));
+    var _this = _possibleConstructorReturn(this, (ChangePasswordModal.__proto__ || Object.getPrototypeOf(ChangePasswordModal)).call(this, props));
+
+    _this.oldPasswordRef = _react2.default.createRef();
+    _this.newPassword1Ref = _react2.default.createRef();
+    _this.newPassword2Ref = _react2.default.createRef();
 
     _this.state = {};
     return _this;
@@ -162,20 +166,20 @@ var ChangePasswordModal = function (_Component) {
                 close = this.props.close;
                 _context.prev = 2;
                 data = {
-                  newPassword: this.refs.newPassword1.value
+                  newPassword: this.newPassword1Ref.current.value
                 };
 
 
                 if (!_jsreportStudio2.default.authentication.user.isAdmin) {
-                  data.oldPassword = this.refs.oldPassword.value;
+                  data.oldPassword = this.oldPasswordRef.current.value;
                 }
 
                 _context.next = 7;
                 return _jsreportStudio2.default.api.post('/api/users/' + entity.shortid + '/password', { data: data });
 
               case 7:
-                this.refs.newPassword1.value = '';
-                this.refs.newPassword2.value = '';
+                this.newPassword1Ref.current.value = '';
+                this.newPassword2Ref.current.value = '';
                 close();
                 _context.next = 15;
                 break;
@@ -204,7 +208,7 @@ var ChangePasswordModal = function (_Component) {
     key: 'validatePassword',
     value: function validatePassword() {
       this.setState({
-        passwordError: this.refs.newPassword2.value && this.refs.newPassword2.value !== this.refs.newPassword1.value,
+        passwordError: this.newPassword2Ref.current.value && this.newPassword2Ref.current.value !== this.newPassword1Ref.current.value,
         apiError: null
       });
     }
@@ -224,7 +228,7 @@ var ChangePasswordModal = function (_Component) {
             null,
             'old password'
           ),
-          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: 'oldPassword' })
+          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: this.oldPasswordRef })
         ),
         _react2.default.createElement(
           'div',
@@ -234,7 +238,7 @@ var ChangePasswordModal = function (_Component) {
             null,
             'new password'
           ),
-          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: 'newPassword1' })
+          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: this.newPassword1Ref })
         ),
         _react2.default.createElement(
           'div',
@@ -244,7 +248,7 @@ var ChangePasswordModal = function (_Component) {
             null,
             'new password verification'
           ),
-          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: 'newPassword2', onChange: function onChange() {
+          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: this.newPassword2Ref, onChange: function onChange() {
               return _this2.validatePassword();
             } })
         ),
@@ -280,13 +284,12 @@ var ChangePasswordModal = function (_Component) {
   return ChangePasswordModal;
 }(_react.Component);
 
-exports.default = ChangePasswordModal;
-
-
 ChangePasswordModal.propTypes = {
   close: _propTypes2.default.func.isRequired,
   options: _propTypes2.default.object.isRequired
 };
+
+exports.default = ChangePasswordModal;
 
 /***/ }),
 /* 4 */
@@ -516,10 +519,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 var LogoutSettingsButton = function (_Component) {
   _inherits(LogoutSettingsButton, _Component);
 
-  function LogoutSettingsButton() {
+  function LogoutSettingsButton(props) {
     _classCallCheck(this, LogoutSettingsButton);
 
-    return _possibleConstructorReturn(this, (LogoutSettingsButton.__proto__ || Object.getPrototypeOf(LogoutSettingsButton)).apply(this, arguments));
+    var _this = _possibleConstructorReturn(this, (LogoutSettingsButton.__proto__ || Object.getPrototypeOf(LogoutSettingsButton)).call(this, props));
+
+    _this.logoutRef = _react2.default.createRef();
+    return _this;
   }
 
   _createClass(LogoutSettingsButton, [{
@@ -534,12 +540,12 @@ var LogoutSettingsButton = function (_Component) {
           'div',
           {
             onClick: function onClick() {
-              return _this2.refs.logout.click();
+              return _this2.logoutRef.current.click();
             }, style: { cursor: 'pointer' } },
           _react2.default.createElement(
             'form',
             { method: 'POST', action: _jsreportStudio2.default.resolveUrl('/logout') },
-            _react2.default.createElement('input', { ref: 'logout', type: 'submit', id: 'logoutBtn', style: { display: 'none' } })
+            _react2.default.createElement('input', { ref: this.logoutRef, type: 'submit', id: 'logoutBtn', style: { display: 'none' } })
           ),
           _react2.default.createElement('i', { className: 'fa fa-power-off' }),
           ' Logout'
@@ -718,6 +724,10 @@ var NewUserModal = function (_Component) {
 
     var _this = _possibleConstructorReturn(this, (NewUserModal.__proto__ || Object.getPrototypeOf(NewUserModal)).call(this));
 
+    _this.usernameRef = _react2.default.createRef();
+    _this.password1Ref = _react2.default.createRef();
+    _this.password2Ref = _react2.default.createRef();
+
     _this.state = {};
     return _this;
   }
@@ -728,7 +738,7 @@ var NewUserModal = function (_Component) {
       var _this2 = this;
 
       setTimeout(function () {
-        return _this2.refs.username.focus();
+        return _this2.usernameRef.current.focus();
       }, 0);
     }
   }, {
@@ -754,7 +764,7 @@ var NewUserModal = function (_Component) {
                   entity = Object.assign(entity, this.props.options.defaults);
                 }
 
-                if (this.refs.username.value) {
+                if (this.usernameRef.current.value) {
                   _context.next = 4;
                   break;
                 }
@@ -762,7 +772,7 @@ var NewUserModal = function (_Component) {
                 return _context.abrupt('return', this.setState({ userNameError: true }));
 
               case 4:
-                if (this.refs.password1.value) {
+                if (this.password1Ref.current.value) {
                   _context.next = 6;
                   break;
                 }
@@ -771,8 +781,8 @@ var NewUserModal = function (_Component) {
 
               case 6:
 
-                entity.username = this.refs.username.value;
-                entity.password = this.refs.password1.value;
+                entity.username = this.usernameRef.current.value;
+                entity.password = this.password1Ref.current.value;
 
                 _context.prev = 8;
                 _context.next = 11;
@@ -815,7 +825,7 @@ var NewUserModal = function (_Component) {
     key: 'validatePassword',
     value: function validatePassword() {
       this.setState({
-        passwordError: this.refs.password2.value && this.refs.password2.value !== this.refs.password1.value,
+        passwordError: this.password2Ref.current.value && this.password2Ref.current.value !== this.password1Ref.current.value,
         apiError: null
       });
     }
@@ -823,7 +833,7 @@ var NewUserModal = function (_Component) {
     key: 'validateUsername',
     value: function validateUsername() {
       this.setState({
-        userNameError: this.refs.username.value === '',
+        userNameError: this.usernameRef.current.value === '',
         apiError: null
       });
     }
@@ -843,7 +853,7 @@ var NewUserModal = function (_Component) {
             null,
             'Username'
           ),
-          _react2.default.createElement('input', { type: 'text', ref: 'username', onChange: function onChange() {
+          _react2.default.createElement('input', { type: 'text', ref: this.usernameRef, onChange: function onChange() {
               return _this3.validateUsername();
             }, onKeyPress: function onKeyPress(e) {
               return _this3.handleKeyPress(e);
@@ -857,7 +867,7 @@ var NewUserModal = function (_Component) {
             null,
             'Password'
           ),
-          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: 'password1' })
+          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: this.password1Ref })
         ),
         _react2.default.createElement(
           'div',
@@ -867,7 +877,7 @@ var NewUserModal = function (_Component) {
             null,
             'Password verification'
           ),
-          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: 'password2', onChange: function onChange() {
+          _react2.default.createElement('input', { type: 'password', autoComplete: 'off', ref: this.password2Ref, onChange: function onChange() {
               return _this3.validatePassword();
             } })
         ),
