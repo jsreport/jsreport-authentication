@@ -81,7 +81,7 @@
 /******/
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 4);
+/******/ 	return __webpack_require__(__webpack_require__.s = 3);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -98,12 +98,6 @@ module.exports = Studio.libraries['react'];
 
 /***/ }),
 /* 2 */
-/***/ (function(module, exports) {
-
-module.exports = Studio.libraries['prop-types'];
-
-/***/ }),
-/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -114,10 +108,6 @@ Object.defineProperty(exports, "__esModule", {
 });
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-var _propTypes = __webpack_require__(2);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
 
 var _react = __webpack_require__(1);
 
@@ -284,33 +274,28 @@ var ChangePasswordModal = function (_Component) {
   return ChangePasswordModal;
 }(_react.Component);
 
-ChangePasswordModal.propTypes = {
-  close: _propTypes2.default.func.isRequired,
-  options: _propTypes2.default.object.isRequired
-};
-
 exports.default = ChangePasswordModal;
 
 /***/ }),
-/* 4 */
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var _UserEditor = __webpack_require__(5);
+var _UserEditor = __webpack_require__(4);
 
 var _UserEditor2 = _interopRequireDefault(_UserEditor);
 
-var _LogoutSettingsButton = __webpack_require__(6);
+var _LogoutSettingsButton = __webpack_require__(5);
 
 var _LogoutSettingsButton2 = _interopRequireDefault(_LogoutSettingsButton);
 
-var _ChangePasswordSettingsButton = __webpack_require__(7);
+var _ChangePasswordSettingsButton = __webpack_require__(6);
 
 var _ChangePasswordSettingsButton2 = _interopRequireDefault(_ChangePasswordSettingsButton);
 
-var _ChangePasswordButton = __webpack_require__(8);
+var _ChangePasswordButton = __webpack_require__(7);
 
 var _ChangePasswordButton2 = _interopRequireDefault(_ChangePasswordButton);
 
@@ -318,7 +303,7 @@ var _jsreportStudio = __webpack_require__(0);
 
 var _jsreportStudio2 = _interopRequireDefault(_jsreportStudio);
 
-var _NewUserModal = __webpack_require__(9);
+var _NewUserModal = __webpack_require__(8);
 
 var _NewUserModal2 = _interopRequireDefault(_NewUserModal);
 
@@ -391,7 +376,7 @@ _jsreportStudio2.default.initializeListeners.unshift(_asyncToGenerator( /*#__PUR
 })));
 
 /***/ }),
-/* 5 */
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -403,15 +388,11 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _propTypes = __webpack_require__(2);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
-
 var _react = __webpack_require__(1);
 
 var _react2 = _interopRequireDefault(_react);
 
-var _ChangePasswordModal = __webpack_require__(3);
+var _ChangePasswordModal = __webpack_require__(2);
 
 var _ChangePasswordModal2 = _interopRequireDefault(_ChangePasswordModal);
 
@@ -427,16 +408,16 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var DataEditor = function (_Component) {
-  _inherits(DataEditor, _Component);
+var UserEditor = function (_Component) {
+  _inherits(UserEditor, _Component);
 
-  function DataEditor() {
-    _classCallCheck(this, DataEditor);
+  function UserEditor() {
+    _classCallCheck(this, UserEditor);
 
-    return _possibleConstructorReturn(this, (DataEditor.__proto__ || Object.getPrototypeOf(DataEditor)).apply(this, arguments));
+    return _possibleConstructorReturn(this, (UserEditor.__proto__ || Object.getPrototypeOf(UserEditor)).apply(this, arguments));
   }
 
-  _createClass(DataEditor, [{
+  _createClass(UserEditor, [{
     key: 'componentDidMount',
     value: function componentDidMount() {
       if (this.props.entity.__isNew && !this.props.entity.password) {
@@ -476,19 +457,13 @@ var DataEditor = function (_Component) {
     }
   }]);
 
-  return DataEditor;
+  return UserEditor;
 }(_react.Component);
 
-exports.default = DataEditor;
-
-
-DataEditor.propTypes = {
-  entity: _propTypes2.default.object.isRequired,
-  onUpdate: _propTypes2.default.func.isRequired
-};
+exports.default = UserEditor;
 
 /***/ }),
-/* 6 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -560,7 +535,7 @@ var LogoutSettingsButton = function (_Component) {
 exports.default = LogoutSettingsButton;
 
 /***/ }),
-/* 7 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -570,7 +545,7 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _ChangePasswordModal = __webpack_require__(3);
+var _ChangePasswordModal = __webpack_require__(2);
 
 var _ChangePasswordModal2 = _interopRequireDefault(_ChangePasswordModal);
 
@@ -599,7 +574,7 @@ exports.default = function (props) {
 };
 
 /***/ }),
-/* 8 */
+/* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -611,15 +586,11 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _propTypes = __webpack_require__(2);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
-
 var _react = __webpack_require__(1);
 
 var _react2 = _interopRequireDefault(_react);
 
-var _ChangePasswordModal = __webpack_require__(3);
+var _ChangePasswordModal = __webpack_require__(2);
 
 var _ChangePasswordModal2 = _interopRequireDefault(_ChangePasswordModal);
 
@@ -675,14 +646,8 @@ var ChangePasswordButton = function (_Component) {
 
 exports.default = ChangePasswordButton;
 
-
-ChangePasswordButton.propTypes = {
-  tab: _propTypes2.default.object,
-  onUpdate: _propTypes2.default.func.isRequired
-};
-
 /***/ }),
-/* 9 */
+/* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -693,10 +658,6 @@ Object.defineProperty(exports, "__esModule", {
 });
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-var _propTypes = __webpack_require__(2);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
 
 var _react = __webpack_require__(1);
 
@@ -920,11 +881,6 @@ var NewUserModal = function (_Component) {
 }(_react.Component);
 
 exports.default = NewUserModal;
-
-
-NewUserModal.propTypes = {
-  close: _propTypes2.default.func.isRequired
-};
 
 /***/ })
 /******/ ]);

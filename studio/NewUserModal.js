@@ -1,4 +1,3 @@
-import PropTypes from 'prop-types'
 import React, { Component } from 'react'
 import Studio from 'jsreport-studio'
 
@@ -96,8 +95,4 @@ export default class NewUserModal extends Component {
       </div>
     </div>
   }
-}
-
-NewUserModal.propTypes = {
-  close: PropTypes.func.isRequired
 }

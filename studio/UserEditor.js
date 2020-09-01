@@ -1,9 +1,8 @@
-import PropTypes from 'prop-types'
 import React, { Component } from 'react'
 import ChangePasswordModal from './ChangePasswordModal.js'
 import Studio from 'jsreport-studio'
 
-export default class DataEditor extends Component {
+class UserEditor extends Component {
   componentDidMount () {
     if (this.props.entity.__isNew && !this.props.entity.password) {
       Studio.openModal(ChangePasswordModal, { entity: this.props.entity })
@@ -22,7 +21,4 @@ export default class DataEditor extends Component {
   }
 }
 
-DataEditor.propTypes = {
-  entity: PropTypes.object.isRequired,
-  onUpdate: PropTypes.func.isRequired
-}
+export default UserEditor

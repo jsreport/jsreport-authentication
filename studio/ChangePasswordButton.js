@@ -1,9 +1,8 @@
-import PropTypes from 'prop-types'
 import React, { Component } from 'react'
 import ChangePasswordModal from './ChangePasswordModal.js'
 import Studio from 'jsreport-studio'
 
-export default class ChangePasswordButton extends Component {
+class ChangePasswordButton extends Component {
   render () {
     if (!this.props.tab || !this.props.tab.entity || this.props.tab.entity.__entitySet !== 'users') {
       return <span />
@@ -19,7 +18,4 @@ export default class ChangePasswordButton extends Component {
   }
 }
 
-ChangePasswordButton.propTypes = {
-  tab: PropTypes.object,
-  onUpdate: PropTypes.func.isRequired
-}
+export default ChangePasswordButton
