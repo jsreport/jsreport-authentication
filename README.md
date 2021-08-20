@@ -1,3 +1,6 @@
+**⚠️ This repository has been moved to the monorepo [jsreport/jsreport](https://github.com/jsreport/jsreport)**
+--
+
 # jsreport-authentication
 [![NPM Version](http://img.shields.io/npm/v/jsreport-authentication.svg?style=flat-square)](https://npmjs.com/package/jsreport-authentication)
 [![Build Status](https://travis-ci.org/jsreport/jsreport-authentication.png?branch=master)](https://travis-ci.org/jsreport/jsreport-authentication)
